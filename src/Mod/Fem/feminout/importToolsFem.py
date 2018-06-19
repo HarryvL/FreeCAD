@@ -32,6 +32,8 @@ import FreeCAD
 from math import pow, sqrt
 import numpy as np
 
+import femmesh.meshtools
+
 
 def get_FemMeshObjectMeshGroups(fem_mesh_obj):
     """
@@ -128,6 +130,7 @@ def make_femmesh(mesh_data):
     if ('Nodes' in m) and (len(m['Nodes']) > 0):
         print("Found: nodes")
         if (
+
                 ('Seg2Elem' in m) or
                 ('Seg3Elem' in m) or
                 ('Tria3Elem' in m) or
@@ -208,10 +211,14 @@ def make_femmesh(mesh_data):
     return mesh
 
 
-def fill_femresult_mechanical(results, result_set, span):
+def fill_femresult_mechanical(results, result_set, span, mesh_data):
     ''' fills a FreeCAD FEM mechanical result object with result data
     '''
     no_of_values = None
+    
+    m = mesh_data
+    
+    result_mesh = FreeCAD.ActiveDocument.Result_mesh.FemMesh
 
     if 'number' in result_set:
         eigenmode_number = result_set['number']
@@ -245,6 +252,7 @@ def fill_femresult_mechanical(results, result_set, span):
         if 'stressv' in result_set:
             stressv = result_set['stressv']
             results.StressVectors = list(map((lambda x: x * scale), stressv.values()))
+            print("type(stressv.values): ",type(stressv.values()))
 
         if 'strainv' in result_set:
             strainv = result_set['strainv']
@@ -258,19 +266,83 @@ def fill_femresult_mechanical(results, result_set, span):
                 prinstress2 = []
                 prinstress3 = []
                 shearstress = []
+                ps1v = []
+                ps2v = []
+                ps3v = []
+                
+#
+#               addtional arrays to hold reinforcement ratios and mohr coulomb criterion          
+#                
+                rhx = []
+                rhy = []
+                rhz = []
+                moc = []
+                
                 for i in stress.values():
                     mstress.append(calculate_von_mises(i))
-                    prin1, prin2, prin3, shear = calculate_principal_stress(i)
+#
+#                   calculation of reinforcement ratio
+#                                   
+                    rhox, rhoy, rhoz, scxx, scyy, sczz = calculate_rho(i)
+#
+#                   calculation of principal CONCRETE stresses (for total principal stresses set fck very high)
+#                                                       
+                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
                     prinstress1.append(prin1)
                     prinstress2.append(prin2)
                     prinstress3.append(prin3)
                     shearstress.append(shear)
+                    ps1v.append(psv[0])
+                    ps2v.append(psv[1])
+                    ps3v.append(psv[2])
+                    print("prin1: {}, prin2: {}, prin3: {}, psv[0]: {}, psv[1]: {}, psv[2]: {}".format(prin1, prin2, prin3, psv[0], psv[1], psv[2]))
+#
+#                   addtional arrays to hold reinforcement ratios and mohr coulomb criterion          
+#                                    
+                    rhx.append(rhox)
+                    rhy.append(rhoy)
+                    rhz.append(rhoz)
+                    moc.append(calculate_mohr_coulomb(prin1,prin2,prin3))
+
+                for obj in FreeCAD.ActiveDocument.Objects:
+                    if obj.isDerivedFrom('App::MaterialObjectPython'):
+                        if obj.Material.get('Name') != "Concrete":
+                            print("NOT CONCRETE")
+                            for ref in obj.References:
+                                non_concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
+#                               print (non_concrete_nodes)
+#                               print (len(results.ReinforcementRatio_x))
+                                for ncn in non_concrete_nodes:
+#                                    print  ("before:",ncn-1,rhx[ncn-1])
+                                    rhx[ncn-1]  = 0.
+                                    rhy[ncn-1]  = 0.
+                                    rhz[ncn-1]  = 0.
+                                    moc[ncn-1] = 0.
+#                                    print  ("after:",ncn-1,rhx[ncn-1])
+                        else:
+                            print("CONCRETE")
+
                 if eigenmode_number > 0:
                     results.StressValues = list(map((lambda x: x * scale), mstress))
                     results.PrincipalMax = list(map((lambda x: x * scale), prinstress1))
                     results.PrincipalMed = list(map((lambda x: x * scale), prinstress2))
                     results.PrincipalMin = list(map((lambda x: x * scale), prinstress3))
                     results.MaxShear = list(map((lambda x: x * scale), shearstress))
+#
+#                   addtional plot results for use in _ViewProviderFemResultMechanical          
+#                                    
+                    results.ReinforcementRatio_x = list(map((lambda x: x * scale), rhx))
+                    results.ReinforcementRatio_y = list(map((lambda x: x * scale), rhy))
+                    results.ReinforcementRatio_z = list(map((lambda x: x * scale), rhz))
+                    results.MohrCoulomb = list(map((lambda x: x * scale), moc))
+                    
+                    print("type(ps1v): ",type(ps1v))
+
+                    
+                    results.PS1Vector = list(map((lambda x: x * scale), ps1v))
+                    results.PS2Vector = list(map((lambda x: x * scale), ps2v))
+                    results.PS3Vector = list(map((lambda x: x * scale), ps3v))
+                    
                     results.Eigenmode = eigenmode_number
                 else:
                     results.StressValues = mstress
@@ -278,12 +350,26 @@ def fill_femresult_mechanical(results, result_set, span):
                     results.PrincipalMed = prinstress2
                     results.PrincipalMin = prinstress3
                     results.MaxShear = shearstress
+#
+#                   addtional plot results for use in _ViewProviderFemResultMechanical          
+#                                    
+                    results.ReinforcementRatio_x  = rhx
+                    results.ReinforcementRatio_y  = rhy                    
+                    results.ReinforcementRatio_z  = rhz
+                    results.MohrCoulomb = moc
+
+                    print("type(ps1v): ",type(ps1v))
+                  
+                    results.PS1Vector = ps1v
+                    results.PS2Vector = ps2v
+                    results.PS3Vector = ps3v
+                    
             stress_keys = list(stress.keys())
             if (results.NodeNumbers != 0 and results.NodeNumbers != stress_keys):
                 print("Inconsistent FEM results: element number for Stress doesn't equal element number for Displacement {} != {}"
                       .format(results.NodeNumbers, len(results.StressValues)))
             results.NodeNumbers = stress_keys
-
+                                                                
         # Read Equivalent Plastic strain if they exist
         if 'peeq' in result_set:
             Peeq = result_set['peeq']
@@ -405,9 +491,65 @@ def fill_femresult_mechanical(results, result_set, span):
     # - module feminout/importVTKResults.py  (workaround fix in importVtkFCResult for broken function in App/FemVTKTools.cpp)
     # TODO: all stats stuff should be reimplemented, ma be a dictionary would be far more robust than a list
 
+#    stress_contour_functions(results, m)
+
     return results
 
+def stress_contour_functions(results,mesh_data):
+    
+    # input variables:
+    # > principal stresses in the nodes (not the integration points)
+    # > mesh and result objects
+    # internal variables:
+    # > principal stress directions
+    # > the integration machinery
+    # output variables
+    # > stress contour functions for sig1, sig2, sig3
+    '''
+    test mesh and result object structures
+    
+    print("results: {}".format(type(results)))        #FeaturePython
+    print("mesh_data: {}".format(type(mesh_data)))    #Dictionary
+   
+    elements=mesh_data['Tetra10Elem']                 #Dictionary with key = element number and values = global node number Tuples 
 
+    print("number of nodes in results.PrincipalMax {}".format(len(results.StressValues)))
+        
+    max_node = 0
+    
+    for key in elements:
+        nodes = np.asarray(elements[key])
+        count = 0
+        for node in nodes:
+            count += 1
+            if node>max_node: max_node = node
+            print("element: {}, element node: {}, node number: {}, Max Principal Stress: {}".format(key, count, node, results.StressValues[node-1]))
+            
+    print("number of nodes: {}".format(max_node))
+    
+    #
+    # mesh info
+    #
+    elements=mesh_data['Tetra10Elem']
+    num_elem=len(elements)
+    print("Number of elements: ",num_elem)
+    #
+    # direction vectors for principal stresses dirv[node,sig_i]=[n1,n2,n3], so dirv[25][2] is the direction vector for sig_3 at node 25
+    #
+    dirv_min=[]
+    dirv_med=[]
+    dirv_max=[]
+    
+    for sMax,sMed,sMin in zip(results.PrincipalMax,results.PrincipalMed,results.PrincipalMin):
+        dirv_min.append([nx_max,ny_max,nz_max]) # direction  
+        dirv_med.append([nx_med,ny_med,nz_med]) # direction  
+        dirv_max.append([nx_min,ny_min,nz_min]) # direction  
+ '''   
+    return
+    
+    
+    
+    
 # helper
 def calculate_von_mises(i):
     # Von mises stress (http://en.wikipedia.org/wiki/Von_Mises_yield_criterion)
@@ -425,16 +567,24 @@ def calculate_von_mises(i):
     return vm_stress
 
 
-def calculate_principal_stress(i):
-    sigma = np.array([[i[0], i[3], i[4]],
-                      [i[3], i[1], i[5]],
-                      [i[4], i[5], i[2]]])
+def calculate_principal_stress(i,scxx,scyy,sczz):
+    sigma = np.array([[scxx, i[3], i[4]],
+                      [i[3], scyy, i[5]],
+                      [i[4], i[5], sczz]])
     # compute principal stresses
-    eigvals = list(np.linalg.eigvalsh(sigma))
-    eigvals.sort()
-    eigvals.reverse()
-    maxshear = (eigvals[0] - eigvals[2]) / 2.0
-    return (eigvals[0], eigvals[1], eigvals[2], maxshear)
+    eigenValues, eigenVectors = np.linalg.eig(sigma) 
+    eigenVectors[0]=eigenValues[0]*eigenVectors[0]
+    eigenVectors[1]=eigenValues[1]*eigenVectors[1]
+    eigenVectors[2]=eigenValues[2]*eigenVectors[2]
+    idx = np.argsort(eigenValues)
+    eigenValues = eigenValues[idx]
+    eigenVectors = eigenVectors[:,idx]
+    
+#    eigvals = list(np.linalg.eigvalsh(sigma))
+#    eigvals.sort()
+#    eigvals.reverse()
+    maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
+    return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors]))
 
 
 def calculate_disp_abs(displacements):
@@ -442,3 +592,162 @@ def calculate_disp_abs(displacements):
     for d in displacements:
         disp_abs.append(sqrt(pow(d[0], 2) + pow(d[1], 2) + pow(d[2], 2)))
     return disp_abs
+
+def calculate_rho(i):
+    
+    Rmin=1.0e9
+   
+    Eqmin=14
+    
+    fy=500.
+
+    sxx = i[0]
+    syy = i[1]
+    szz = i[2]
+    sxy = i[3]
+    syz = i[4]
+    sxz = i[5]
+    
+    Rhox=np.zeros(15)
+    Rhoy=np.zeros(15)
+    Rhoz=np.zeros(15)    
+    
+#    I1=sxx+syy+szz
+#    I2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2
+    I3=sxx*syy*szz+2*sxy*sxz*syz-sxx*syz**2-syy*sxz**2-szz*sxy**2
+    
+    #Solution (5)
+    d=(sxx*syy-sxy**2)
+    if d!=0.:
+        Rhoz[0]=I3/d/fy 
+    
+    #Solution (6)
+    d=(sxx*szz-sxz**2)
+    if d!=0.: 
+        Rhoy[1]=I3/d/fy 
+    
+    #Solution (7)
+    d=(syy*szz-syz**2)
+    if d!=0.: 
+        Rhox[2]=I3/d/fy 
+    
+    #Solution (9)
+    if sxx!=0.:
+        fc=sxz*sxy/sxx-syz
+        fxy=sxy**2/sxx
+        fxz=sxz**2/sxx
+
+        #Solution (9+)
+        Rhoy[3]=syy-fxy+fc
+        Rhoy[3]/=fy
+        Rhoz[3]=szz-fxz+fc
+        Rhoz[3]/=fy
+   
+        #Solution (9-)
+        Rhoy[4]=syy-fxy-fc
+        Rhoy[4]/=fy
+        Rhoz[4]=szz-fxz-fc
+        Rhoz[4]/=fy
+
+    #Solution (10)
+    if syy!=0.:
+        fc=syz*sxy/syy-sxz
+        fxy=sxy**2/syy
+        fyz=syz**2/syy
+
+        #Solution (10+)
+        Rhox[5]=sxx-fxy+fc
+        Rhox[5]/=fy
+        Rhoz[5]=szz-fyz+fc
+        Rhoz[5]/=fy
+   
+         #Solution (10-)vm
+        Rhox[6]=sxx-fxy-fc
+        Rhox[6]/=fy
+        Rhoz[6]=szz-fyz-fc
+        Rhoz[6]/=fy
+
+    #Solution (11)
+    if szz!=0.:
+        fc=sxz*syz/szz-sxy
+        fxz=sxz**2/szz
+        fyz=syz**2/szz
+
+        #Solution (11+)
+        Rhox[7]=sxx-fxz+fc
+        Rhox[7]/=fy
+        Rhoy[7]=syy-fyz+fc
+        Rhoy[7]/=fy
+   
+        #Solution (11-)
+        Rhox[8]=sxx-fxz-fc
+        Rhox[8]/=fy
+        Rhoy[8]=syy-fyz-fc
+        Rhoy[8]/=fy
+
+    #Solution (13)
+    Rhox[9]=(sxx+sxy+sxz)/fy
+    Rhoy[9]=(syy+sxy+syz)/fy
+    Rhoz[9]=(szz+sxz+syz)/fy
+    
+    #Solution (14)
+    Rhox[10]=(sxx+sxy-sxz)/fy
+    Rhoy[10]=(syy+sxy-syz)/fy
+    Rhoz[10]=(szz-sxz-syz)/fy
+
+    #Solution (15)
+    Rhox[11]=(sxx-sxy-sxz)/fy
+    Rhoy[11]=(syy-sxy+syz)/fy
+    Rhoz[11]=(szz-sxz+syz)/fy
+                        
+    #Solution (16)
+    Rhox[12]=(sxx-sxy+sxz)/fy
+    Rhoy[12]=(syy-sxy-syz)/fy
+    Rhoz[12]=(szz+sxz-syz)/fy
+
+    #Solution (17)
+    if syz!=0.:
+        Rhox[13]=(sxx-sxy*sxz/syz)/fy
+    if sxz!=0.:
+        Rhoy[13]=(syy-sxy*syz/sxz)/fy
+    if sxy!=0.:
+        Rhoz[13]=(szz-sxz*syz/sxy)/fy
+    
+    for ir in range (0,Rhox.size):
+
+        if Rhox[ir]>=-1.e-10 and Rhoy[ir]>=-1.e-10 and Rhoz[ir]>-1.e-10:
+
+            #Concrete Stresses
+            scxx=sxx-Rhox[ir]*fy
+            scyy=syy-Rhoy[ir]*fy
+            sczz=szz-Rhoz[ir]*fy
+            Ic1=scxx+scyy+sczz
+            Ic2=scxx*scyy+scyy*sczz+sczz*scxx-sxy**2-sxz**2-syz**2
+            Ic3=scxx*scyy*sczz+2*sxy*sxz*syz-scxx*syz**2-scyy*sxz**2-sczz*sxy**2
+            
+            if(Ic1<=1.e-6 and Ic2>=-1.e-6 and Ic3<=1.0e-6):
+
+                Rsum=Rhox[ir]+Rhoy[ir]+Rhoz[ir]
+
+                if Rsum<Rmin and Rsum>0.:
+                    Rmin=Rsum
+                    Eqmin=ir
+
+    scxx=sxx-Rhox[Eqmin]*fy
+    scyy=syy-Rhoy[Eqmin]*fy
+    sczz=szz-Rhoz[Eqmin]*fy
+    
+    return (Rhox[Eqmin],Rhoy[Eqmin],Rhoz[Eqmin],scxx,scyy,sczz)
+
+def calculate_mohr_coulomb(prin1,prin2,prin3):
+    # Von mises stress (http://en.wikipedia.org/wiki/Von_Mises_yield_criterion)
+    
+    phi=np.pi/6.
+    fck=30.
+    coh=fck*(1-np.sin(phi))/2/np.cos(phi)
+    
+    mc_stress=(prin1-prin3)+(prin1+prin3)*np.sin(phi)-2.*coh*np.cos(phi)
+    
+    if mc_stress<0.: mc_stress=0.
+            
+    return mc_stress
