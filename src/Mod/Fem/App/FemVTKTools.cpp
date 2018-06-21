@@ -1008,6 +1008,9 @@ void FemVTKTools::exportMechanicalResult(const App::DocumentObject* res, vtkSmar
     vectors["DisplacementVectors"] = "Displacement";
     vectors["StrainVectors"] = "Strain vectors";
     vectors["StressVectors"] = "Stress vectors";
+    vectors["PS1Vector"] = "Major Principal Stress Vectors";
+    vectors["PS2Vector"] = "Intermediate Principal Stress Vectors";
+    vectors["PS3Vector"] = "Minor Principal Stress Vectors";
     std::map<std::string, std::string> scalers;  // App::FloatListProperty name -> vtk name
     scalers["UserDefined"] = "User Defined Results";
     scalers["Temperature"] = "Temperature";

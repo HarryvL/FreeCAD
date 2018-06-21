@@ -252,7 +252,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
         if 'stressv' in result_set:
             stressv = result_set['stressv']
             results.StressVectors = list(map((lambda x: x * scale), stressv.values()))
-            print("type(stressv.values): ",type(stressv.values()))
+#            print("type(stressv.values): ",type(stressv.values()))
 
         if 'strainv' in result_set:
             strainv = result_set['strainv']
@@ -287,7 +287,11 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
 #
 #                   calculation of principal CONCRETE stresses (for total principal stresses set fck very high)
 #                                                       
-                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
+#                    disable concrete principal stresses for now
+#                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
+#
+#                    total stresses for now:
+                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,i[0],i[1],i[2])
                     prinstress1.append(prin1)
                     prinstress2.append(prin2)
                     prinstress3.append(prin3)
@@ -295,7 +299,13 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     ps1v.append(psv[0])
                     ps2v.append(psv[1])
                     ps3v.append(psv[2])
-                    print("prin1: {}, prin2: {}, prin3: {}, psv[0]: {}, psv[1]: {}, psv[2]: {}".format(prin1, prin2, prin3, psv[0], psv[1], psv[2]))
+                    
+#                    print ("--after returning----------------------------------------------------------------------")
+#                    print ("eigenvalue 1: {}, eigenvector 1: {}".format(prin1,psv[0]))
+#                    print ("eigenvalue 2: {}, eigenvector 2: {}".format(prin2,psv[1]))
+#                    print ("eigenvalue 3: {}, eigenvector 3: {}".format(prin3,psv[2]))
+
+#                    print("prin1: {}, prin2: {}, prin3: {}, psv[0]: {}, psv[1]: {}, psv[2]: {}".format(prin1, prin2, prin3, psv[0], psv[1], psv[2]))
 #
 #                   addtional arrays to hold reinforcement ratios and mohr coulomb criterion          
 #                                    
@@ -336,7 +346,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     results.ReinforcementRatio_z = list(map((lambda x: x * scale), rhz))
                     results.MohrCoulomb = list(map((lambda x: x * scale), moc))
                     
-                    print("type(ps1v): ",type(ps1v))
+#                    print("type(ps1v): ",type(ps1v))
 
                     
                     results.PS1Vector = list(map((lambda x: x * scale), ps1v))
@@ -358,7 +368,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     results.ReinforcementRatio_z  = rhz
                     results.MohrCoulomb = moc
 
-                    print("type(ps1v): ",type(ps1v))
+#                    print("type(ps1v): ",type(ps1v))
                   
                     results.PS1Vector = ps1v
                     results.PS2Vector = ps2v
@@ -568,23 +578,52 @@ def calculate_von_mises(i):
 
 
 def calculate_principal_stress(i,scxx,scyy,sczz):
-    sigma = np.array([[scxx, i[3], i[4]],
-                      [i[3], scyy, i[5]],
-                      [i[4], i[5], sczz]])
+#
+#   note mistake in master: swapped i[4] and i[5]
+#
+    sigma = np.array([[scxx, i[3], i[5]],
+                      [i[3], scyy, i[4]],
+                      [i[5], i[4], sczz]])
+                      
+#    print ("--input----------------------------------------------------------------------")
+#    print("sigma: {}".format(sigma))                  
     # compute principal stresses
-    eigenValues, eigenVectors = np.linalg.eig(sigma) 
-    eigenVectors[0]=eigenValues[0]*eigenVectors[0]
-    eigenVectors[1]=eigenValues[1]*eigenVectors[1]
-    eigenVectors[2]=eigenValues[2]*eigenVectors[2]
-    idx = np.argsort(eigenValues)
+    eigenValues, eigenVectors = np.linalg.eig(sigma)
+    
+#    print ("--np.linalg.eig(sigma)----------------------------------------------------------------------")
+#    print("eigenvalues:  {}".format(eigenValues))
+#    print("eigenvectors: {}".format(eigenVectors))
+    
+#    print ("--raw----------------------------------------------------------------------")
+#    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
+#    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
+#    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
+
+    eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
+    eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
+    eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
+
+#    print ("--scaled----------------------------------------------------------------------")
+#    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
+#    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
+#    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
+
+
+    idx = eigenValues.argsort()[::-1]   
+#    idx = np.argsort(eigenValues)
     eigenValues = eigenValues[idx]
     eigenVectors = eigenVectors[:,idx]
+    
+#    print ("--sorted----------------------------------------------------------------------")
+#    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
+#    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
+#    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
     
 #    eigvals = list(np.linalg.eigvalsh(sigma))
 #    eigvals.sort()
 #    eigvals.reverse()
     maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
-    return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors]))
+    return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors.T]))
 
 
 def calculate_disp_abs(displacements):
