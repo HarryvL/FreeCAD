@@ -260,7 +260,8 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
 
         if 'stress' in result_set:
             stress = result_set['stress']
-            if len(stress) > 0:
+            nsr=len(stress)
+            if nsr > 0:
                 mstress = []
                 prinstress1 = []
                 prinstress2 = []
@@ -269,29 +270,64 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                 ps1v = []
                 ps2v = []
                 ps3v = []
-                
+                ic=np.zeros(len(stress))
 #
-#               addtional arrays to hold reinforcement ratios and mohr coulomb criterion          
+#               addtional arrays to hold reinforcement ratios and mohr coulomb stress          
 #                
                 rhx = []
                 rhy = []
                 rhz = []
                 moc = []
-                
-                for i in stress.values():
+#
+#               determine concrete / non-concrete nodes
+#                
+                for obj in FreeCAD.ActiveDocument.Objects:
+                    if obj.isDerivedFrom('App::MaterialObjectPython'):
+                        if obj.Material.get('Name') == "Concrete":
+                            print("CONCRETE")
+                            if obj.References == []:
+                                for iic in range(nsr):
+                                    if ic[iic] == 0:
+                                        ic[iic] = 1
+                            else:
+                                for ref in obj.References:
+                                    concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
+                                    for cn in concrete_nodes:
+                                        ic [cn-1] = 1
+                        else:
+                            print("NOT CONCRETE")
+                            if obj.References == []:
+                                for iic in range(nsr):
+                                    if ic[iic] == 0:
+                                        ic[iic] = 2
+                            else:
+                                for ref in obj.References:
+                                    non_concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
+                                    for ncn in non_concrete_nodes:
+                                        ic [ncn-1] = 2
+
+                for isv in range(nsr):
+
+                    i=stress.values()[isv]
+
+                    rhox=0.
+                    rhoy=0.
+                    rhoz=0.
+                    mc=0.
+                    scxx=i[0]
+                    scyy=i[1]
+                    sczz=i[2]
+
                     mstress.append(calculate_von_mises(i))
+                    
+                    if ic[isv]==1:
 #
-#                   calculation of reinforcement ratio
-#                                   
-                    rhox, rhoy, rhoz, scxx, scyy, sczz = calculate_rho(i)
+#                       calculation of reinforcement ratio
 #
-#                   calculation of principal CONCRETE stresses (for total principal stresses set fck very high)
-#                                                       
-#                    disable concrete principal stresses for now
-#                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
+                        rhox, rhoy, rhoz, scxx, scyy, sczz = calculate_rho(i)
+
 #
-#                    total stresses for now:
-                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,i[0],i[1],i[2])
+                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
                     prinstress1.append(prin1)
                     prinstress2.append(prin2)
                     prinstress3.append(prin3)
@@ -299,38 +335,16 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     ps1v.append(psv[0])
                     ps2v.append(psv[1])
                     ps3v.append(psv[2])
-                    
-#                    print ("--after returning----------------------------------------------------------------------")
-#                    print ("eigenvalue 1: {}, eigenvector 1: {}".format(prin1,psv[0]))
-#                    print ("eigenvalue 2: {}, eigenvector 2: {}".format(prin2,psv[1]))
-#                    print ("eigenvalue 3: {}, eigenvector 3: {}".format(prin3,psv[2]))
 
-#                    print("prin1: {}, prin2: {}, prin3: {}, psv[0]: {}, psv[1]: {}, psv[2]: {}".format(prin1, prin2, prin3, psv[0], psv[1], psv[2]))
 #
-#                   addtional arrays to hold reinforcement ratios and mohr coulomb criterion          
-#                                    
+#                   reinforcement ratios and mohr coulomb criterion
+#
                     rhx.append(rhox)
                     rhy.append(rhoy)
                     rhz.append(rhoz)
-                    moc.append(calculate_mohr_coulomb(prin1,prin2,prin3))
-
-                for obj in FreeCAD.ActiveDocument.Objects:
-                    if obj.isDerivedFrom('App::MaterialObjectPython'):
-                        if obj.Material.get('Name') != "Concrete":
-                            print("NOT CONCRETE")
-                            for ref in obj.References:
-                                non_concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
-#                               print (non_concrete_nodes)
-#                               print (len(results.ReinforcementRatio_x))
-                                for ncn in non_concrete_nodes:
-#                                    print  ("before:",ncn-1,rhx[ncn-1])
-                                    rhx[ncn-1]  = 0.
-                                    rhy[ncn-1]  = 0.
-                                    rhz[ncn-1]  = 0.
-                                    moc[ncn-1] = 0.
-#                                    print  ("after:",ncn-1,rhx[ncn-1])
-                        else:
-                            print("CONCRETE")
+                    if ic[isv]==1:
+                        mc=calculate_mohr_coulomb(prin1,prin2,prin3)
+                    moc.append(mc)
 
                 if eigenmode_number > 0:
                     results.StressValues = list(map((lambda x: x * scale), mstress))
@@ -373,7 +387,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     results.PS1Vector = ps1v
                     results.PS2Vector = ps2v
                     results.PS3Vector = ps3v
-                    
+                 
             stress_keys = list(stress.keys())
             if (results.NodeNumbers != 0 and results.NodeNumbers != stress_keys):
                 print("Inconsistent FEM results: element number for Stress doesn't equal element number for Displacement {} != {}"
@@ -589,7 +603,14 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 #    print("sigma: {}".format(sigma))                  
     # compute principal stresses
     eigenValues, eigenVectors = np.linalg.eig(sigma)
-    
+
+#    
+#   deal with complex eigenvalue and vectors 
+#    
+
+    eigenValues = eigenValues.real
+    eigenVectors = eigenVectors.real
+
 #    print ("--np.linalg.eig(sigma)----------------------------------------------------------------------")
 #    print("eigenvalues:  {}".format(eigenValues))
 #    print("eigenvectors: {}".format(eigenVectors))
@@ -610,7 +631,6 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 
 
     idx = eigenValues.argsort()[::-1]   
-#    idx = np.argsort(eigenValues)
     eigenValues = eigenValues[idx]
     eigenVectors = eigenVectors[:,idx]
     
@@ -619,9 +639,6 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 #    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
 #    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
     
-#    eigvals = list(np.linalg.eigvalsh(sigma))
-#    eigvals.sort()
-#    eigvals.reverse()
     maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
     return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors.T]))
 
@@ -633,11 +650,17 @@ def calculate_disp_abs(displacements):
     return disp_abs
 
 def calculate_rho(i):
-    
+
+#
+#   HarryvL - Calculation of Reinforcement Ratios and Concrete Stresses according to http://heronjournal.nl/53-4/3.pdf
+#           - See post https://forum.freecadweb.org/viewtopic.php?f=18&t=28821
+#           - TODO: reinforcement yield strength fy (hardcoded now) needs to be added to the material properties of the concrete material object
+#
+
     Rmin=1.0e9
-   
+
     Eqmin=14
-    
+
     fy=500.
 
     sxx = i[0]
@@ -779,7 +802,11 @@ def calculate_rho(i):
     return (Rhox[Eqmin],Rhoy[Eqmin],Rhoz[Eqmin],scxx,scyy,sczz)
 
 def calculate_mohr_coulomb(prin1,prin2,prin3):
-    # Von mises stress (http://en.wikipedia.org/wiki/Von_Mises_yield_criterion)
+#
+#   HarryvL - Calculation of Mohr Coulomb yield criterion to judge concrete curshing and shear failure
+#           - TODO: reinforcement yield strength phi and fck (hardcoded now) need to be added to the material properties of the concrete material object
+#           - TODO: Consider normalising Mohr Coulomb stress (e.g. mc_stess/fck) to be become a relative measure of how far stresses are outside eleastic region 
+#
     
     phi=np.pi/6.
     fck=30.

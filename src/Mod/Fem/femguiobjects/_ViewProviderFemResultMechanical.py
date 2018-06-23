@@ -369,9 +369,7 @@ class _TaskPanelFemResultShow:
         ps3vector = np.array(self.result_obj.PS1Vector)
         s3x = np.array(ps3vector[:, 0])
         s3y = np.array(ps3vector[:, 1])
-        s3z = np.array(ps3vector[:, 2])
-        
-        
+        s3z = np.array(ps3vector[:, 2])        
         
         userdefined_eq = self.form.user_def_eq.toPlainText()  # Get equation to be used
         UserDefinedFormula = eval(userdefined_eq).tolist()
