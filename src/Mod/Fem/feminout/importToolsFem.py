@@ -261,6 +261,8 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
         if 'stress' in result_set:
             stress = result_set['stress']
             nsr=len(stress)
+            print("nsr: {}".format(nsr))
+
             if nsr > 0:
                 mstress = []
                 prinstress1 = []
@@ -270,19 +272,22 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                 ps1v = []
                 ps2v = []
                 ps3v = []
-                ic=np.zeros(len(stress))
+                ic=np.zeros(nsr)
 #
-#               addtional arrays to hold reinforcement ratios and mohr coulomb stress          
+#               HarryvL: addtional arrays to hold reinforcement ratios and mohr coulomb stress          
 #                
                 rhx = []
                 rhy = []
                 rhz = []
                 moc = []
 #
-#               determine concrete / non-concrete nodes
+#               HarryvL: determine concrete / non-concrete nodes
 #                
                 for obj in FreeCAD.ActiveDocument.Objects:
                     if obj.isDerivedFrom('App::MaterialObjectPython'):
+                        print("object: {}".format(obj))
+                        print("object Name: {}".format(obj.Material.get('Name')))
+                        print("object.References: {}".format(obj.References))
                         if obj.Material.get('Name') == "Concrete":
                             print("CONCRETE")
                             if obj.References == []:
@@ -292,6 +297,8 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                             else:
                                 for ref in obj.References:
                                     concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
+                                    print(type(concrete_nodes))
+                                    print("concrete nodes: {}".format(concrete_nodes))
                                     for cn in concrete_nodes:
                                         ic [cn-1] = 1
                         else:
@@ -322,10 +329,12 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     
                     if ic[isv]==1:
 #
-#                       calculation of reinforcement ratio
+#                       HarryvL: calculation of reinforcement ratio
 #
                         rhox, rhoy, rhoz, scxx, scyy, sczz = calculate_rho(i)
 
+#
+#                       HarryvL: for concrete scxx etc. are affected by reinforcement (see calculate_rho(i)). for all other materials scxx etc. are the original stresses
 #
                     prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
                     prinstress1.append(prin1)
@@ -381,9 +390,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                     results.ReinforcementRatio_y  = rhy                    
                     results.ReinforcementRatio_z  = rhz
                     results.MohrCoulomb = moc
-
-#                    print("type(ps1v): ",type(ps1v))
-                  
+                 
                     results.PS1Vector = ps1v
                     results.PS2Vector = ps2v
                     results.PS3Vector = ps3v
@@ -515,66 +522,282 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
     # - module feminout/importVTKResults.py  (workaround fix in importVtkFCResult for broken function in App/FemVTKTools.cpp)
     # TODO: all stats stuff should be reimplemented, ma be a dictionary would be far more robust than a list
 
-#    stress_contour_functions(results, m)
+    stress_trajectory_contour_functions(results, m)
+    
+    
 
     return results
 
-def stress_contour_functions(results,mesh_data):
+def stress_trajectory_contour_functions(results,mesh_data):
     
-    # input variables:
-    # > principal stresses in the nodes (not the integration points)
+    #
+    # HarryvL 
+    #
+    # Functionality:
+    # > This function takes principal directions for each node and computes the stress trajectory contour function for the full domain
+    # > Limited to 10-node quadratic isoparametric tetrahedral elements
+    # > The theory is pending publication
+    # Input variables:
+    # > 3 principal stress vectors for each node
     # > mesh and result objects
-    # internal variables:
-    # > principal stress directions
-    # > the integration machinery
-    # output variables
-    # > stress contour functions for sig1, sig2, sig3
-    '''
-    test mesh and result object structures
+    # Internal variables:
+    # > elNodes[i=0:number_of_elements-1,j=0:9] stores the gobal node number for element number i and local node number j
+    # > noCoord[i=0:number_of_nodes-1,j=0:2] stores the global nodal coordinates for node i
+    # Output variables
+    # > stress trajectory contour functions stcf1, stcf2, stcf3
+    # Notes:
+    # mesh_data['Tetra10Elem']: Dictionary with key=element_number and values=global_node_number Tuples
+    # mesh_data['Nodes']: Dictionary with key=global_node_number and values=node_coordinates Tuples
+    #
     
-    print("results: {}".format(type(results)))        #FeaturePython
-    print("mesh_data: {}".format(type(mesh_data)))    #Dictionary
-   
-    elements=mesh_data['Tetra10Elem']                 #Dictionary with key = element number and values = global node number Tuples 
+    ips=np.array([[0.138196601125011,0.138196601125011,0.138196601125011,0.041666666666667],[0.585410196624968,0.138196601125011,0.138196601125011,0.041666666666667],[0.138196601125011,0.585410196624968,0.138196601125011,0.041666666666667],[0.138196601125011,0.138196601125011,0.585410196624968,0.041666666666667]])
+    
+    ps1=np.asarray(results.PrincipalMax)
+    ps2=np.asarray(results.PrincipalMed)
+    ps3=np.asarray(results.PrincipalMin)
+    
+    psV1=np.asarray(results.PS1Vector)
+    psV2=np.asarray(results.PS2Vector)
+    psV3=np.asarray(results.PS3Vector)
+    
+    elNodes=np.asarray(mesh_data['Tetra10Elem'].values())
+    noCoord=np.asarray(mesh_data['Nodes'].values())
+    print ("elNodes.shape: {}".format(elNodes.shape))
+    
+    print ("*******************************elNodes*******************************")
+    print (elNodes)
+    print ("*******************************noCoord*******************************")
+    print (noCoord)
+    
+    if elNodes == []:
+        print("no 10-node quadratic isoparametric tetrahedral elements found")
+    else:
+        print("10-node quadratic isoparametric tetrahedral elements found")
+    #
+    #   Calculate the domain matrix and right hand side and solve the equations
+    #
+        nn=len(noCoord[:,0])
+        print ("*******************************number of nodes*******************************")
+        print (nn)
+        Domain_Mat=np.zeros((nn, nn), dtype=np.float64)
+        Domain_Rhs=np.zeros((nn), dtype=np.float64)
+    #
+    #   For each element calculate the element matrix and right hand side
+    #
+        for element, nodes in enumerate(elNodes):
+        #for el in elNodes:
+            print("element: {}".format(element))
 
-    print("number of nodes in results.PrincipalMax {}".format(len(results.StressValues)))
-        
-    max_node = 0
-    
-    for key in elements:
-        nodes = np.asarray(elements[key])
-        count = 0
-        for node in nodes:
-            count += 1
-            if node>max_node: max_node = node
-            print("element: {}, element node: {}, node number: {}, Max Principal Stress: {}".format(key, count, node, results.StressValues[node-1]))
+            xl=[[],[],[]]
+            fxn3=[]
+            fyn3=[]
+            fzn3=[]
+            Elem_Mat=np.zeros((10,10),dtype=np.float64)
+            Elem_Rhs=np.zeros((10), dtype=np.float64)
+    #
+    #       Set up nodal values for this element
+    #
+            for nd in nodes:
+                #print("nd: {}".format(nd))
+                #print("psV1[nd,0]")
+                #print(psV1[nd,0].shape)
+                #print("psV1[nd,1]")
+                #print(psV1[nd,1].shape)
+                
+    #
+    #
+    #            First make this work for the minor principal stress (compression) only
+    #            fxn1.append(ps1[nd]*(psV1[nd,1]+psV1[nd,2]))
+    #            fyn1.append(ps1[nd]*(psV2[nd,1]+psV2[nd,2]))
+    #            fzn1.append(ps1[nd]*(psV3[nd,1]+psV3[nd,2]))
+    #            fxn2.append(ps2[nd]*(psV1[nd,2]+psV1[nd,0]))
+    #            fyn2.append(ps2[nd]*(psV2[nd,2]+psV2[nd,0]))
+    #            fzn2.append(ps2[nd]*(psV3[nd,2]+psV3[nd,0]))
+    #
+                fxn3.append(ps3[nd-1]*(psV1[nd-1,0]+psV1[nd-1,1]))
+                fyn3.append(ps3[nd-1]*(psV2[nd-1,0]+psV2[nd-1,1]))
+                fzn3.append(ps3[nd-1]*(psV3[nd-1,0]+psV3[nd-1,1]))
+    #
+                xl[0].append(noCoord[nd-1,0])
+                xl[1].append(noCoord[nd-1,1])
+                xl[2].append(noCoord[nd-1,2])
+    #
+    #       Integrate element matrix and right-hand side
+    #
+            #print("fxn3")
+            #print(fxn3)
+            #print("xl[0]")
+            #print(xl[0])
             
-    print("number of nodes: {}".format(max_node))
-    
+            for ip in ips:
+                xi=ip[0]
+                et=ip[1]
+                ze=ip[2]
+                xsj,shp,dshp,ndxTndx,ndyTndy,ndzTndz = shape10tet(xi,et,ze,xl)
+                fxip=np.dot(shp,fxn3)
+                fyip=np.dot(shp,fyn3)
+                fzip=np.dot(shp,fzn3)
+                Elem_Mat+=(ndxTndx+ndyTndy+ndzTndz)*ip[3]*xsj
+                
+                #print("fxip")
+                #print(fxip.shape)
+                #print("fyip")
+                #print(fyip.shape)
+                #print("fzip")
+                #print(fzip.shape)
+                #print("dshp[0]")
+                #print(dshp[0].shape)
+                #print("dshp[1]")
+                #print(dshp[1].shape)
+                #print("dshp[2]")
+                #print(dshp[2].shape)
+                #print("ip[3]")
+                #print(ip[3].shape)
+                #print("xsj")
+                #print(xsj.shape)
+                Elem_Rhs+=(fxip*dshp[0]+fyip*dshp[1]+fzip*dshp[2])*ip[3]*xsj
     #
-    # mesh info
+    #       Add Element matrix and right hand side to Domain matrix and right hand side
     #
-    elements=mesh_data['Tetra10Elem']
-    num_elem=len(elements)
-    print("Number of elements: ",num_elem)
+            #print("element matrix: {}".format(Elem_Mat))
+            for i in range(10):
+                iglob=nodes[i]
+                #print("node: {}".format(iglob))
+                Domain_Rhs[iglob-1]+=Elem_Rhs[i]
+                for j in range (10):
+                    jglob=nodes[j]
+                    Domain_Mat[iglob-1,jglob-1]+=Elem_Mat[i,j] 
+                
     #
-    # direction vectors for principal stresses dirv[node,sig_i]=[n1,n2,n3], so dirv[25][2] is the direction vector for sig_3 at node 25
+    #       Boundary Condition
     #
-    dirv_min=[]
-    dirv_med=[]
-    dirv_max=[]
-    
-    for sMax,sMed,sMin in zip(results.PrincipalMax,results.PrincipalMed,results.PrincipalMin):
-        dirv_min.append([nx_max,ny_max,nz_max]) # direction  
-        dirv_med.append([nx_med,ny_med,nz_med]) # direction  
-        dirv_max.append([nx_min,ny_min,nz_min]) # direction  
- '''   
+        for index, value in enumerate(Domain_Mat[0]):
+            Domain_Mat[0][index] = 0.
+            Domain_Mat[index][0] = 0.
+        Domain_Mat[0][0]=1.
+        Domain_Rhs[0]=0.
+    #
+    #   Solve stress trajectory contour functions 
+    #
+
+        Domain_Mat_Inv = np.linalg.inv(Domain_Mat)
+    #
+        stcf3=np.dot(Domain_Mat_Inv,Domain_Rhs)
+        
+    #   temporarily store in Mohr Coulomb
+        results.MohrCoulomb=stcf3.tolist()
+
     return
     
-    
-    
-    
-# helper
+def shape10tet(xi,et,ze,xl):
+    #
+    # HarryvL (Modified from shape10tet.f - Copyright (C) 1998-2011 Guido Dhondt)
+    #
+    # Functionality:
+    # > Calculate finite element shape functions, their derivatives and the Jacobian of the transformation
+    # > Limited to 10-node quadratic isoparametric tetrahedral elements
+    # Input variables:
+    # > Local coordinates (xi, et, ze) of the integration point 
+    # > Global coordinates of the element nodes (xl[i=0,1,2])
+    # Internal variables:
+    # > local derivative of the global coordinates (xs)
+    # > global derivative of the local coordinates (xsi = inversion of xs)
+    # Output variables
+    # > shape functions (shp) at the integration point
+    # > derivatives of the shape functions (dshp) at the integration point
+    # > matrices (N,i)T*N,i for i=x,y,z (ndxTndx,ndyTndy,ndzTndz) at the integration point... see theory
+    # > the Jacobian of the transformation (xsj) at the integration point
+    # Notes:
+    # mesh_data['Tetra10Elem']: Dictionary with key=element_number and values=global_node_number Tuples
+    # mesh_data['Nodes']: Dictionary with key=global_node_number and values=node_coordinates Tuples
+    #
+    shp=np.zeros((10),dtype=np.float64)
+    dshp=np.zeros((3, 10),dtype=np.float64)
+    xs=np.zeros((3, 3), dtype=np.float64)
+    xsi=np.zeros((3, 3), dtype=np.float64)
+    ndxTndx=np.zeros((10,10),dtype=np.float64)
+    ndyTndy=np.zeros((10,10),dtype=np.float64)
+    ndzTndz=np.zeros((10,10),dtype=np.float64)
+    # 
+    # shape functions
+    #
+    a=1.0-xi-et-ze
+    shp[0]=(2.0*a-1.0)*a
+    shp[1]=xi*(2.0*xi-1.0)
+    shp[2]=et*(2.0*et-1.0)
+    shp[3]=ze*(2.0*ze-1.0)
+    shp[4]=4.0*xi*a
+    shp[5]=4.0*xi*et
+    shp[6]=4.0*et*a
+    shp[7]=4.0*ze*a
+    shp[8]=4.0*xi*ze
+    shp[9]=4.0*et*ze
+    #
+    #
+    # local derivatives of the shape functions: xi-derivative
+    #
+    dshp[0, 0]=1.0-4.0*(1.0-xi-et-ze)
+    dshp[0, 1]=4.0*xi-1.0
+    dshp[0, 2]=0.0
+    dshp[0, 3]=0.0
+    dshp[0, 4]=4.0*(1.0-2.0*xi-et-ze)
+    dshp[0, 5]=4.0*et
+    dshp[0, 6]=-4.0*et
+    dshp[0, 7]=-4.0*ze
+    dshp[0, 8]=4.0*ze
+    dshp[0, 9]=0.0
+    #
+    # local derivatives of the shape functions: eta-derivative
+    #
+    dshp[1, 0]=1.0-4.0*(1.0-xi-et-ze)
+    dshp[1, 1]=0.0
+    dshp[1, 2]=4.0*et-1.0
+    dshp[1, 3]=0.0
+    dshp[1, 4]=-4.0*xi
+    dshp[1, 5]=4.0*xi
+    dshp[1, 6]=4.0*(1.0-xi-2.0*et-ze)
+    dshp[1, 7]=-4.0*ze
+    dshp[1, 8]=0.0
+    dshp[1, 9]=4.0*ze
+    #
+    # local derivatives of the shape functions: zeta-derivative
+    #
+    dshp[2, 0]=1.0-4.0*(1.0-xi-et-ze)
+    dshp[2, 1]=0.0
+    dshp[2, 2]=0.0
+    dshp[2, 3]=4.0*ze-1.0
+    dshp[2, 4]=-4.0*xi
+    dshp[2, 5]=0.0
+    dshp[2, 6]=-4.0*et
+    dshp[2, 7]=4.0*(1.0-xi-et-2.0*ze)
+    dshp[2, 8]=4.0*xi
+    dshp[2, 9]=4.0*et
+    #
+    # computation of the local derivative of the global coordinates ## (xs)
+    #
+    xs=np.dot(xl,dshp.T)
+    #
+    # computation of the Jacobian
+    #
+    xsj=np.linalg.det(xs)
+    #
+    # computation of the global derivative of the local coordinates (xsi) (inversion of xs)
+    #    
+    xsi=np.linalg.inv(xs)
+    #
+    # computation of the global derivatives of the shape functions
+    #
+    dshp=np.dot(xsi.T,dshp)
+    #
+    # computation of matrices (N,i)T*N,i for i=x,y,z... see theory
+    #    
+    ndxTndx=np.outer(dshp[0],dshp[0])
+    ndyTndy=np.outer(dshp[1],dshp[1])
+    ndzTndz=np.outer(dshp[2],dshp[2])
+    #
+    return xsj,shp,dshp,ndxTndx,ndyTndy,ndzTndz
+
+
 def calculate_von_mises(i):
     # Von mises stress (http://en.wikipedia.org/wiki/Von_Mises_yield_criterion)
     s11 = i[0]
@@ -593,19 +816,21 @@ def calculate_von_mises(i):
 
 def calculate_principal_stress(i,scxx,scyy,sczz):
 #
-#   note mistake in master: swapped i[4] and i[5]
+#   HarryvL: note mistake in master: swapped i[4] and i[5]
 #
     sigma = np.array([[scxx, i[3], i[5]],
                       [i[3], scyy, i[4]],
                       [i[5], i[4], sczz]])
                       
+#
 #    print ("--input----------------------------------------------------------------------")
 #    print("sigma: {}".format(sigma))                  
-    # compute principal stresses
+#    compute principal stresses
+    
     eigenValues, eigenVectors = np.linalg.eig(sigma)
 
 #    
-#   deal with complex eigenvalue and vectors 
+#   HarryvL: suppress complex eigenvalue and vectors that may occur for near-zero (numerical noise) stress fields
 #    
 
     eigenValues = eigenValues.real
@@ -620,9 +845,9 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 #    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
 #    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
 
-    eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
-    eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
-    eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
+#    eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
+#    eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
+#    eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
 
 #    print ("--scaled----------------------------------------------------------------------")
 #    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
@@ -640,6 +865,7 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 #    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
     
     maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
+    
     return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors.T]))
 
 
@@ -674,8 +900,8 @@ def calculate_rho(i):
     Rhoy=np.zeros(15)
     Rhoz=np.zeros(15)    
     
-#    I1=sxx+syy+szz
-#    I2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2
+#    I1=sxx+syy+szz NOT USED
+#    I2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2 NOT USED
     I3=sxx*syy*szz+2*sxy*sxz*syz-sxx*syz**2-syy*sxz**2-szz*sxy**2
     
     #Solution (5)
