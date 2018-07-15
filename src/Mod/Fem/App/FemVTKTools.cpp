@@ -53,7 +53,6 @@
 #include <SMESH_Mesh.hxx>
 #include <SMDS_PolyhedralVolumeOfNodes.hxx>
 #include <SMDS_VolumeTool.hxx>
-#include <SMESHDS_Mesh.hxx>
 
 # include <TopoDS_Face.hxx>
 # include <TopoDS_Solid.hxx>
@@ -441,30 +440,22 @@ void FemVTKTools::exportVTKMesh(const FemMesh* mesh, vtkSmartPointer<vtkUnstruct
     Base::Console().Message("Start: VTK mesh builder ======================\n");
     SMESH_Mesh* smesh = const_cast<SMESH_Mesh*>(mesh->getSMesh());
     SMESHDS_Mesh* meshDS = smesh->GetMeshDS();
+    const SMDS_MeshInfo& info = meshDS->GetMeshInfo();
 
-    // nodes
-    Base::Console().Message("  Start: VTK mesh builder nodes.\n");
-
+    //start with the nodes
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
     SMDS_NodeIteratorPtr aNodeIter = meshDS->nodesIterator();
 
-    while (aNodeIter->more()) {
+    points->SetNumberOfPoints(info.NbNodes());
+    for(; aNodeIter->more(); ) {
         const SMDS_MeshNode* node = aNodeIter->next();  // why float, not double?
         double coords[3] = {double(node->X()*scale), double(node->Y()*scale), double(node->Z()*scale)};
-        points->InsertPoint(node->GetID()-1, coords);  // memory is allocated by VTK points size = max node id, points will be inserted in SMESH point gaps too
+        points->SetPoint(node->GetID()-1, coords);
     }
     grid->SetPoints(points);
-    // nodes debugging
-    const SMDS_MeshInfo& info = meshDS->GetMeshInfo();
-    Base::Console().Message("    Size of nodes in SMESH grid: %i.\n", info.NbNodes());
-    const vtkIdType nNodes = grid->GetNumberOfPoints();
-    Base::Console().Message("    Size of nodes in VTK grid: %i.\n", nNodes);
-    Base::Console().Message("  End: VTK mesh builder nodes.\n");
-
     // faces
     SMDS_FaceIteratorPtr aFaceIter = meshDS->facesIterator();
     exportFemMeshFaces(grid, aFaceIter);
-
     // volumes
     SMDS_VolumeIteratorPtr aVolIter = meshDS->volumesIterator();
     exportFemMeshCells(grid, aVolIter);
@@ -482,7 +473,6 @@ void FemVTKTools::writeVTKMesh(const char* filename, const FemMesh* mesh)
     vtkSmartPointer<vtkUnstructuredGrid> grid = vtkSmartPointer<vtkUnstructuredGrid>::New();
     exportVTKMesh(mesh, grid);
     //vtkSmartPointer<vtkDataSet> dataset = vtkDataSet::SafeDownCast(grid);
-    Base::Console().Message("Start: writing mesh data ======================\n");
     if(f.hasExtension("vtu")){
         writeVTKFile<vtkXMLUnstructuredGridWriter>(filename, grid);
     }
@@ -856,7 +846,7 @@ void _exportResult(const App::DocumentObject* result, vtkSmartPointer<vtkDataSet
             const std::vector<Base::Vector3d>& vel = field->getValues();
             vtkSmartPointer<vtkDoubleArray> data = vtkSmartPointer<vtkDoubleArray>::New();
             if(nPoints != field->getSize())
-                Base::Console().Error("PropertyVectorList->getSize() = %d, not equal to vtk mesh node count %d \n", field->getSize(), nPoints);
+                Base::Console().Error("PropertyVectorList->getSize() = %d, not equal to mesh point number \n", field->getSize());
             data->SetNumberOfComponents(dim);
             data->SetNumberOfTuples(vel.size());
             data->SetName(kv.second.c_str());  // kv.first may be a better name, without space
@@ -967,19 +957,26 @@ void FemVTKTools::importMechanicalResult(vtkSmartPointer<vtkDataSet> dataset, Ap
     // DisplaceVectors are essential, Temperature and other is optional
     std::map<std::string, std::string> vectors;  // property defined in MechanicalResult.py -> variable name in vtk
     vectors["DisplacementVectors"] = "Displacement";
-    vectors["StrainVectors"] = "Strain vectors";
-    vectors["StressVectors"] = "Stress vectors";
+    vectors["StrainVectors"] = "Strain Vectors";
+    vectors["StressVectors"] = "Stress Vectors";
+    vectors["PS1Vector"] = "Major Principal Stress Vectors";
+    vectors["PS2Vector"] = "Intermediate Principal Stress Vectors";
+    vectors["PS3Vector"] = "Minor Principal Stress Vectors";
     std::map<std::string, std::string> scalers;  // App::FloatListProperty name -> vtk name
     scalers["UserDefined"] = "User Defined Results";
     scalers["Temperature"] = "Temperature";
     scalers["PrincipalMax"] = "Maximum Principal stress";
-    scalers["PrincipalMed"] = "Median Principal stress";
+    scalers["PrincipalMed"] = "Intermediate Principal stress";
     scalers["PrincipalMin"] = "Minimum Principal stress";
     scalers["MaxShear"] = "Max shear stress (Tresca)";
     scalers["StressValues"] = "Von Mises stress";
     scalers["MassFlowRate"] = "Mass Flow Rate";
     scalers["NetworkPressure"] = "Network Pressure";
     scalers["Peeq"] = "Peeq";
+    scalers["ReinforcementRatio_x"] = "Reinforcement Ratio x";
+    scalers["ReinforcementRatio_y"] = "Reinforcement Ratio y";
+    scalers["ReinforcementRatio_z"] = "Reinforcement Ratio z";
+    scalers["MohrCoulomb"] = "Mohr Coulomb Stress";
     //scalers["DisplacementLengths"] = "";  // not yet exported in exportMechanicalResult()
 
     std::map<std::string, int> varids;
@@ -1011,6 +1008,9 @@ void FemVTKTools::exportMechanicalResult(const App::DocumentObject* res, vtkSmar
     vectors["DisplacementVectors"] = "Displacement";
     vectors["StrainVectors"] = "Strain vectors";
     vectors["StressVectors"] = "Stress vectors";
+    vectors["PS1Vector"] = "Major Principal Stress Vectors";
+    vectors["PS2Vector"] = "Intermediate Principal Stress Vectors";
+    vectors["PS3Vector"] = "Minor Principal Stress Vectors";
     std::map<std::string, std::string> scalers;  // App::FloatListProperty name -> vtk name
     scalers["UserDefined"] = "User Defined Results";
     scalers["Temperature"] = "Temperature";
@@ -1022,6 +1022,10 @@ void FemVTKTools::exportMechanicalResult(const App::DocumentObject* res, vtkSmar
     scalers["MassFlowRate"] = "Mass Flow Rate";
     scalers["NetworkPressure"] = "Network Pressure";
     scalers["Peeq"] = "Peeq";
+    scalers["ReinforcementRatio_x"] = "Reinforcement Ratio x";
+    scalers["ReinforcementRatio_y"] = "Reinforcement Ratio y";
+    scalers["ReinforcementRatio_z"] = "Reinforcement Ratio z";
+    scalers["MohrCoulomb"] = "Mohr Coulomb Stress";
     //scalers["DisplacementLengths"] = "";  // not yet exported in exportMechanicalResult()
 
     std::string essential_property = std::string("DisplacementVectors");
