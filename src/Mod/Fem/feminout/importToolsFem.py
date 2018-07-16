@@ -285,9 +285,6 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
 #                
                 for obj in FreeCAD.ActiveDocument.Objects:
                     if obj.isDerivedFrom('App::MaterialObjectPython'):
-                        print("object: {}".format(obj))
-                        print("object Name: {}".format(obj.Material.get('Name')))
-                        print("object.References: {}".format(obj.References))
                         if obj.Material.get('Name') == "Concrete":
                             print("CONCRETE")
                             if obj.References == []:
@@ -297,8 +294,6 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                             else:
                                 for ref in obj.References:
                                     concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
-                                    print(type(concrete_nodes))
-                                    print("concrete nodes: {}".format(concrete_nodes))
                                     for cn in concrete_nodes:
                                         ic [cn-1] = 1
                         else:
@@ -522,7 +517,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
     # - module feminout/importVTKResults.py  (workaround fix in importVtkFCResult for broken function in App/FemVTKTools.cpp)
     # TODO: all stats stuff should be reimplemented, ma be a dictionary would be far more robust than a list
 
-    stress_trajectory_contour_functions(results, m)
+#    stress_trajectory_contour_functions(results, m)
     
     
 
@@ -562,12 +557,12 @@ def stress_trajectory_contour_functions(results,mesh_data):
     
     elNodes=np.asarray(mesh_data['Tetra10Elem'].values())
     noCoord=np.asarray(mesh_data['Nodes'].values())
-    print ("elNodes.shape: {}".format(elNodes.shape))
+#    print ("elNodes.shape: {}".format(elNodes.shape))
     
-    print ("*******************************elNodes*******************************")
-    print (elNodes)
-    print ("*******************************noCoord*******************************")
-    print (noCoord)
+#    print ("*******************************elNodes*******************************")
+#    print (elNodes)
+#    print ("*******************************noCoord*******************************")
+#    print (noCoord)
     
     if elNodes == []:
         print("no 10-node quadratic isoparametric tetrahedral elements found")
@@ -577,8 +572,8 @@ def stress_trajectory_contour_functions(results,mesh_data):
     #   Calculate the domain matrix and right hand side and solve the equations
     #
         nn=len(noCoord[:,0])
-        print ("*******************************number of nodes*******************************")
-        print (nn)
+#        print ("*******************************number of nodes*******************************")
+#        print (nn)
         Domain_Mat=np.zeros((nn, nn), dtype=np.float64)
         Domain_Rhs=np.zeros((nn), dtype=np.float64)
     #
@@ -586,7 +581,7 @@ def stress_trajectory_contour_functions(results,mesh_data):
     #
         for element, nodes in enumerate(elNodes):
         #for el in elNodes:
-            print("element: {}".format(element))
+#            print("element: {}".format(element))
 
             xl=[[],[],[]]
             fxn3=[]
@@ -814,7 +809,6 @@ def calculate_von_mises(i):
     return vm_stress
 
 
-<<<<<<< HEAD
 def calculate_principal_stress(i):
     sigma = np.array([[i[0], i[3], i[5]],
                       [i[3], i[1], i[4]],
@@ -825,7 +819,7 @@ def calculate_principal_stress(i):
     eigvals.reverse()
     maxshear = (eigvals[0] - eigvals[2]) / 2.0
     return (eigvals[0], eigvals[1], eigvals[2], maxshear)
-=======
+ 
 def calculate_principal_stress(i,scxx,scyy,sczz):
 #
 #   HarryvL: note mistake in master: swapped i[4] and i[5]
@@ -879,7 +873,6 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
     maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
     
     return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors.T]))
->>>>>>> b874baac008a22fe6532dae626dce981876091c9
 
 
 def calculate_disp_abs(displacements):
