@@ -331,7 +331,10 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
 #
 #                       HarryvL: for concrete scxx etc. are affected by reinforcement (see calculate_rho(i)). for all other materials scxx etc. are the original stresses
 #
+                    print("")
+                    print("node: {}".format(isv))
                     prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
+                    print("psv[2]: {}".format(psv[2]))
                     prinstress1.append(prin1)
                     prinstress2.append(prin2)
                     prinstress3.append(prin3)
@@ -350,6 +353,10 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
                         mc=calculate_mohr_coulomb(prin1,prin2,prin3)
                     moc.append(mc)
 
+                #print("******")
+                #print("ps3v[659-1]: {}".format(ps3v[659-1]))
+                
+                
                 if eigenmode_number > 0:
                     results.StressValues = list(map((lambda x: x * scale), mstress))
                     results.PrincipalMax = list(map((lambda x: x * scale), prinstress1))
@@ -517,7 +524,7 @@ def fill_femresult_mechanical(results, result_set, span, mesh_data):
     # - module feminout/importVTKResults.py  (workaround fix in importVtkFCResult for broken function in App/FemVTKTools.cpp)
     # TODO: all stats stuff should be reimplemented, ma be a dictionary would be far more robust than a list
 
-#    stress_trajectory_contour_functions(results, m)
+    stress_trajectory_contour_functions(results, m)
     
     
 
@@ -546,6 +553,7 @@ def stress_trajectory_contour_functions(results,mesh_data):
     #
     
     ips=np.array([[0.138196601125011,0.138196601125011,0.138196601125011,0.041666666666667],[0.585410196624968,0.138196601125011,0.138196601125011,0.041666666666667],[0.138196601125011,0.585410196624968,0.138196601125011,0.041666666666667],[0.138196601125011,0.138196601125011,0.585410196624968,0.041666666666667]])
+    nps=np.array([[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,1.0],[0.5,0.0,0.0],[0.5,0.5,0.0],[0.0,0.5,0.0],[0.0,0.0,0.5],[0.5,0.0,0.5],[0.0,0.5,0.5]])
     
     ps1=np.asarray(results.PrincipalMax)
     ps2=np.asarray(results.PrincipalMed)
@@ -555,14 +563,11 @@ def stress_trajectory_contour_functions(results,mesh_data):
     psV2=np.asarray(results.PS2Vector)
     psV3=np.asarray(results.PS3Vector)
     
+    
+    
     elNodes=np.asarray(mesh_data['Tetra10Elem'].values())
     noCoord=np.asarray(mesh_data['Nodes'].values())
 #    print ("elNodes.shape: {}".format(elNodes.shape))
-    
-#    print ("*******************************elNodes*******************************")
-#    print (elNodes)
-#    print ("*******************************noCoord*******************************")
-#    print (noCoord)
     
     if elNodes == []:
         print("no 10-node quadratic isoparametric tetrahedral elements found")
@@ -572,85 +577,148 @@ def stress_trajectory_contour_functions(results,mesh_data):
     #   Calculate the domain matrix and right hand side and solve the equations
     #
         nn=len(noCoord[:,0])
-#        print ("*******************************number of nodes*******************************")
-#        print (nn)
+
         Domain_Mat=np.zeros((nn, nn), dtype=np.float64)
         Domain_Rhs=np.zeros((nn), dtype=np.float64)
+        gpn=np.zeros((nn, 3), dtype=np.float64)
     #
     #   For each element calculate the element matrix and right hand side
     #
-        for element, nodes in enumerate(elNodes):
-        #for el in elNodes:
-#            print("element: {}".format(element))
-
+        element=0
+        
+        for nodes in elNodes:
+#
+            element+=1
+            
+            print("")
+            print("*** element: {} ***".format(element))
+#
+            print("")
+            print("*** nodes: {} ***".format(nodes))
             xl=[[],[],[]]
-            fxn3=[]
-            fyn3=[]
-            fzn3=[]
+            s3=[]
+            psV1e=[]
+            psV2e=[]
+            psV3e=[]
+            grad_per_node=[]
+            
             Elem_Mat=np.zeros((10,10),dtype=np.float64)
             Elem_Rhs=np.zeros((10), dtype=np.float64)
+            z=np.zeros((3), dtype=np.float64)
+            
+
     #
     #       Set up nodal values for this element
     #
             for nd in nodes:
-                #print("nd: {}".format(nd))
-                #print("psV1[nd,0]")
-                #print(psV1[nd,0].shape)
-                #print("psV1[nd,1]")
-                #print(psV1[nd,1].shape)
+                #print("")
+                if(ps3[nd-1]<0.0):
+                    s3.append(ps3[nd-1])
+                else:
+                    s3.append(0.0)
+            
+                psV1e.append(psV1[nd-1])
+                psV2e.append(psV2[nd-1])
+                psV3e.append(psV3[nd-1])
                 
-    #
-    #
-    #            First make this work for the minor principal stress (compression) only
-    #            fxn1.append(ps1[nd]*(psV1[nd,1]+psV1[nd,2]))
-    #            fyn1.append(ps1[nd]*(psV2[nd,1]+psV2[nd,2]))
-    #            fzn1.append(ps1[nd]*(psV3[nd,1]+psV3[nd,2]))
-    #            fxn2.append(ps2[nd]*(psV1[nd,2]+psV1[nd,0]))
-    #            fyn2.append(ps2[nd]*(psV2[nd,2]+psV2[nd,0]))
-    #            fzn2.append(ps2[nd]*(psV3[nd,2]+psV3[nd,0]))
-    #
-                fxn3.append(ps3[nd-1]*(psV1[nd-1,0]+psV1[nd-1,1]))
-                fyn3.append(ps3[nd-1]*(psV2[nd-1,0]+psV2[nd-1,1]))
-                fzn3.append(ps3[nd-1]*(psV3[nd-1,0]+psV3[nd-1,1]))
-    #
+                #print("nd {}, location {}, psV3[nd-1]: {}".format(nd, (noCoord[nd-1,0],noCoord[nd-1,1],noCoord[nd-1,2]),psV3[nd-1]))
+                #print("nd {}, location {}".format(nd, (noCoord[nd-1,0],noCoord[nd-1,1],noCoord[nd-1,2])))
+                
                 xl[0].append(noCoord[nd-1,0])
                 xl[1].append(noCoord[nd-1,1])
                 xl[2].append(noCoord[nd-1,2])
+                
+                print("node: {}, x={}, y={}, z={}".format(nd, noCoord[nd-1,0],noCoord[nd-1,1],noCoord[nd-1,2]))
+                
+    #
+    #       Calculate gradient of the contour function in each node
+    #
+            nl=0
+            for nc in nps:
+                nl+=1
+                xsj,shp,dshp,ndxTndx,ndyTndy,ndzTndz = shape10tet(nc[0],nc[1],nc[2],xl)
+                
+                e1=np.dot(shp.T,psV1e)
+                e2=np.dot(shp.T,psV2e)
+                e3=np.dot(shp.T,psV3e)
+                
+                ds3d=np.dot(dshp,s3)
+                
+                stress=np.dot(shp.T,s3)
+                
+                #print("")
+                #print("ds3d: {}".format(ds3d))
+                
+                e=np.array([e1,e2,e3])
+                ez=np.array([e1,e2,z])
+                
+                eezt=np.dot(e.T,ez)
+                #print("")
+                #print("eezt: {}".format(eezt))
+
+                #grad=np.dot(eezt,ds3d)
+                
+                #ln=np.sqrt(xl[0][nl-1]**2+xl[2][nl-1]**2)
+                #if (ln<0.0000001): ln=0.0000001
+                
+                #grad=np.array([-xl[2][nl-1]/ln,0.0,xl[0][nl-1]/ln]) - WRONG
+                
+                #grad=np.array([xl[0][nl-1]/ln,0,xl[2][nl-1]/ln]) - RIGHT
+                
+                #grad=np.array([-1.0,0.0,2.0]) - RIGHT
+
+                #grad=np.array([-xl[0][nl-1]/50.0,0.0,2.0]) - RIGHT
+
+                #grad=np.array([-xl[2][nl-1]/10,0.0,xl[0][nl-1]/10]) - WRONG
+                
+                #grad=np.array([(xl[2][nl-1]-1000)/50,0.0,(xl[0][nl-1]-1000)/150]) - WRONG ... shifted mesh to (1000,1000)
+                
+                #grad=np.array([1.0,0.0,1.0]) - RIGHT
+
+                #grad=np.array([0.0,0.0,1.0]) - RIGHT
+                
+                grad=xl[2][nl-1]*np.array([1.0,0.0,max(1.0-xl[0][nl-1]/10.0,0.0)]) #- WRONG
+                
+                print("")
+                print("grad: {}".format(grad))
+                
+                #print("")
+                #print("cos(e3,grad): {}".format(np.dot(e3,grad)))
+                
+                grad_per_node.append(grad)
+                
+    #
+    #       Place grad temporarily back in results.PS2Vector to allow plotting 
+    #
+            #print("")
+            #print("grad_per_node: {}".format(grad_per_node))
+            ni=0
+            for nd in nodes:
+                ni+=1
+                
+                gpn[nd-1]=grad_per_node[ni-1]
     #
     #       Integrate element matrix and right-hand side
     #
-            #print("fxn3")
-            #print(fxn3)
-            #print("xl[0]")
-            #print(xl[0])
             
             for ip in ips:
+
                 xi=ip[0]
                 et=ip[1]
                 ze=ip[2]
+
                 xsj,shp,dshp,ndxTndx,ndyTndy,ndzTndz = shape10tet(xi,et,ze,xl)
-                fxip=np.dot(shp,fxn3)
-                fyip=np.dot(shp,fyn3)
-                fzip=np.dot(shp,fzn3)
+
                 Elem_Mat+=(ndxTndx+ndyTndy+ndzTndz)*ip[3]*xsj
                 
-                #print("fxip")
-                #print(fxip.shape)
-                #print("fyip")
-                #print(fyip.shape)
-                #print("fzip")
-                #print(fzip.shape)
-                #print("dshp[0]")
-                #print(dshp[0].shape)
-                #print("dshp[1]")
-                #print(dshp[1].shape)
-                #print("dshp[2]")
-                #print(dshp[2].shape)
-                #print("ip[3]")
-                #print(ip[3].shape)
-                #print("xsj")
-                #print(xsj.shape)
-                Elem_Rhs+=(fxip*dshp[0]+fyip*dshp[1]+fzip*dshp[2])*ip[3]*xsj
+                grad_in_ip=np.dot(shp.T,grad_per_node)
+                #grad_in_ip=grad_per_node[0]
+                
+                print("")
+                print("grad in ip: {}".format(grad_in_ip))
+                
+                Elem_Rhs+=np.dot(dshp.T,grad_in_ip)*ip[3]*xsj
+                
     #
     #       Add Element matrix and right hand side to Domain matrix and right hand side
     #
@@ -679,8 +747,12 @@ def stress_trajectory_contour_functions(results,mesh_data):
     #
         stcf3=np.dot(Domain_Mat_Inv,Domain_Rhs)
         
-    #   temporarily store in Mohr Coulomb
+        #stcf3=np.linalg.solve(Domain_Mat, Domain_Rhs)
+        
+    #   temporarily store stress trajectory contour function in Mohr Coulomb and gradient field in PS2Vector
         results.MohrCoulomb=stcf3.tolist()
+        results.PS2Vector=tuple([tuple(row) for row in gpn])
+
 
     return
     
@@ -690,13 +762,13 @@ def shape10tet(xi,et,ze,xl):
     #
     # Functionality:
     # > Calculate finite element shape functions, their derivatives and the Jacobian of the transformation
-    # > Limited to 10-node quadratic isoparametric tetrahedral elements
+    # > Works only for 10-node quadratic isoparametric tetrahedral elements
     # Input variables:
     # > Local coordinates (xi, et, ze) of the integration point 
     # > Global coordinates of the element nodes (xl[i=0,1,2])
     # Internal variables:
     # > local derivative of the global coordinates (xs)
-    # > global derivative of the local coordinates (xsi = inversion of xs)
+    # > global derivative of the local coordinates (xsi = inverse of xs)
     # Output variables
     # > shape functions (shp) at the integration point
     # > derivatives of the shape functions (dshp) at the integration point
@@ -708,11 +780,6 @@ def shape10tet(xi,et,ze,xl):
     #
     shp=np.zeros((10),dtype=np.float64)
     dshp=np.zeros((3, 10),dtype=np.float64)
-    xs=np.zeros((3, 3), dtype=np.float64)
-    xsi=np.zeros((3, 3), dtype=np.float64)
-    ndxTndx=np.zeros((10,10),dtype=np.float64)
-    ndyTndy=np.zeros((10,10),dtype=np.float64)
-    ndzTndz=np.zeros((10,10),dtype=np.float64)
     # 
     # shape functions
     #
@@ -776,7 +843,7 @@ def shape10tet(xi,et,ze,xl):
     #
     xsj=np.linalg.det(xs)
     #
-    # computation of the global derivative of the local coordinates (xsi) (inversion of xs)
+    # computation of the global derivative of the local coordinates (xsi) (inverse of xs)
     #    
     xsi=np.linalg.inv(xs)
     #
@@ -808,7 +875,7 @@ def calculate_von_mises(i):
     vm_stress = sqrt(0.5 * (s11s22 + s22s33 + s33s11 + s12s23s31))
     return vm_stress
 
-
+'''
 def calculate_principal_stress(i):
     sigma = np.array([[i[0], i[3], i[5]],
                       [i[3], i[1], i[4]],
@@ -819,6 +886,7 @@ def calculate_principal_stress(i):
     eigvals.reverse()
     maxshear = (eigvals[0] - eigvals[2]) / 2.0
     return (eigvals[0], eigvals[1], eigvals[2], maxshear)
+'''
  
 def calculate_principal_stress(i,scxx,scyy,sczz):
 #
@@ -851,9 +919,19 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
 #    print ("eigenvalue 2: {}, eigenvector 2: {}".format(eigenValues[1],eigenVectors[:,1]))
 #    print ("eigenvalue 3: {}, eigenvector 3: {}".format(eigenValues[2],eigenVectors[:,2]))
 
-#    eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
-#    eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
-#    eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
+    #if eigenVectors[0,0]+eigenVectors[1,0]+eigenVectors[2,0]<0:
+    #    eigenVectors[:,0]=-eigenVectors[:,0]
+    #if eigenVectors[0,1]+eigenVectors[1,1]+eigenVectors[2,1]<0:
+    #    eigenVectors[:,1]=-eigenVectors[:,1]
+
+    #eigenVectors[:,0]=sign*eigenVectors[:,0]
+    #eigenVectors[:,1]=sign*eigenVectors[:,1]
+    #eigenVectors[:,2]=sign*eigenVectors[:,2]
+
+    
+    #eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
+    #eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
+    #eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
 
 #    print ("--scaled----------------------------------------------------------------------")
 #    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
@@ -864,6 +942,15 @@ def calculate_principal_stress(i,scxx,scyy,sczz):
     idx = eigenValues.argsort()[::-1]   
     eigenValues = eigenValues[idx]
     eigenVectors = eigenVectors[:,idx]
+
+    #sign=1.0
+    #if eigenVectors[0,2]<0:
+    #    sign=-1.0
+    
+    #eigenVectors=sign*eigenVectors
+
+    #print("minor eigen vactor: {}".format(eigenVectors[:,2]))
+
     
 #    print ("--sorted----------------------------------------------------------------------")
 #    print ("eigenvalue 1: {}, eigenvector 1: {}".format(eigenValues[0],eigenVectors[:,0]))
