@@ -424,6 +424,11 @@ def makeSolverZ88(doc, name="SolverZ88"):
     obj = femsolver.z88.solver.create(doc, name)
     return obj
 
+def makeSolverOOFEM(doc, name="SolverOOFEM"):
+    '''makeSolverOOFEM(document, [name]): makes a OOFEM solver object'''
+    import femsolver.OOFEM.solver
+    obj = femsolver.OOFEM.solver.create(doc, name)
+    return obj
 
 '''
 # get the supportedTypes

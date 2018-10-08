@@ -38,7 +38,7 @@ _ELMER_PARAM = "User parameter:BaseApp/Preferences/Mod/Fem/Elmer"
 _GRID_PARAM = "User parameter:BaseApp/Preferences/Mod/Fem/Grid"
 _CCX_PARAM = "User parameter:BaseApp/Preferences/Mod/Fem/Ccx"
 _Z88_PARAM = "User parameter:BaseApp/Preferences/Mod/Fem/Z88"
-
+_OOFEM_PARAM = "User parameter:BaseApp/Preferences/Mod/Fem/OOFEM"
 
 class _BinaryDlg(object):
 
@@ -77,6 +77,11 @@ _BINARIES = {
         param=_Z88_PARAM,
         useDefault="UseStandardZ88Location",
         customPath="z88BinaryPath"),
+    "OOFEM": _BinaryDlg(
+        default="oofem",
+        param=_OOFEM_PARAM,
+        useDefault="UseStandardOOFEMLocation",
+        customPath="oofemBinaryPath"),
 }
 
 
