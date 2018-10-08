@@ -24,6 +24,7 @@
 #define GUI_PLACEMENT_H
 
 #include <Gui/InputVector.h>
+#include <Gui/SelectionObject.h>
 #include <Gui/TaskView/TaskDialog.h>
 #include <Gui/TaskView/TaskView.h>
 #include <Base/Placement.h>
@@ -57,6 +58,7 @@ public:
 
 protected:
     void changeEvent(QEvent *e);
+    void keyPressEvent(QKeyEvent*);
 
 private Q_SLOTS:
     void on_applyButton_clicked();
@@ -64,6 +66,8 @@ private Q_SLOTS:
     void onPlacementChanged(int);
     void on_resetButton_clicked();
     void on_centerOfMass_toggled(bool);
+    void on_selectedVertex_clicked();
+    void on_applyAxial_clicked();
 
 private:
     bool onApply();
@@ -92,6 +96,11 @@ private:
     Base::Vector3d cntOfMass;
     std::string propertyName; // the name of the placement property
     std::set<std::string> documents;
+    /**
+     * store these so we can reselect original object
+     * after user selects points and clicks Selected point(s)
+     */
+    std::vector<SelectionObject> selectionObjects;
 
     friend class TaskPlacement;
 };

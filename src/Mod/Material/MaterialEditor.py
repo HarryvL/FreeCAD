@@ -28,6 +28,9 @@ from Material import getMaterialAttributeStructure
 import os
 from PySide import QtCore, QtGui
 # from PySide import QtUiTools, QtSvg
+import sys
+if sys.version_info.major >= 3:
+    unicode = str
 
 
 __title__ = "FreeCAD material editor"
@@ -142,10 +145,11 @@ class MaterialEditor:
         self.getMaterialResources()
         self.cards = {}
         for p in self.resources:
-            for f in os.listdir(p):
-                b, e = os.path.splitext(f)
-                if e.upper() == ".FCMAT":
-                    self.cards[b] = p + os.sep + f
+            if os.path.exists(p):
+                for f in os.listdir(p):
+                    b, e = os.path.splitext(f)
+                    if e.upper() == ".FCMAT":
+                        self.cards[b] = p + os.sep + f
         # self.outputCards()
         if self.cards:
             self.widget.ComboMaterial.clear()

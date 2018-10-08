@@ -985,6 +985,9 @@ App::DocumentObjectExecReturn *Hole::execute(void)
         else
             xDir = gp_Vec(0, -zDir.Z(), zDir.Y());
 
+        // Normalize xDir; this is needed as the computation above does not necessarily give a unit-length vector.
+        xDir.Normalize();
+
         if ( method == "Dimension" )
             length = Depth.getValue();
         else if ( method == "UpToFirst" ) {
@@ -1250,7 +1253,8 @@ App::DocumentObjectExecReturn *Hole::execute(void)
             builder.Add(holes, transformer.Shape() );
         }
 
-        holes.Move( this->getLocation().Inverted() );
+        // Do not apply a placement to the AddSubShape property (#0003547)
+        //holes.Move( this->getLocation().Inverted() );
 
         // set the subtractive shape property for later usage in e.g. pattern
         this->AddSubShape.setValue( holes );

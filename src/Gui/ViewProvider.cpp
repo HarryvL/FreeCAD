@@ -24,6 +24,7 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+# include <QApplication>
 # include <QPixmap>
 # include <QTimer>
 # include <Inventor/SoPickedPoint.h>
@@ -55,6 +56,8 @@
 #include "ViewProviderExtension.h"
 
 #include <boost/bind.hpp>
+
+FC_LOG_LEVEL_INIT("ViewProvider",true,true)
 
 using namespace std;
 using namespace Gui;
@@ -178,12 +181,21 @@ void ViewProvider::eventCallback(void * ud, SoEventCallback * node)
                 if (self->keyPressed (press, ke->getKey())) {
                     node->setHandled();
                 }
-                else {
+                else if(QApplication::mouseButtons()==Qt::NoButton) {
+                    // Because of a Coin bug (https://bitbucket.org/Coin3D/coin/pull-requests/119),
+                    // FC may crash if user hits ESC to cancel while still
+                    // holding the mouse button while using some SoDragger.
+                    // Therefore, we shall ignore ESC while any mouse button is
+                    // pressed, until this Coin bug is fixed.
+
                     Gui::TimerFunction* func = new Gui::TimerFunction();
                     func->setAutoDelete(true);
                     Gui::Document* doc = Gui::Application::Instance->activeDocument();
                     func->setFunction(boost::bind(&Document::resetEdit, doc));
                     QTimer::singleShot(0, func, SLOT(timeout()));
+                }
+                else if (press) {
+                    FC_WARN("Please release all mouse buttons before exiting editing");
                 }
                 break;
             default:
@@ -211,13 +223,22 @@ void ViewProvider::eventCallback(void * ud, SoEventCallback * node)
         }
     }
     catch (const Base::Exception& e) {
-        Base::Console().Error("Unhandled exception in ViewProvider::eventCallback: %s\n", e.what());
+        Base::Console().Error("Unhandled exception in ViewProvider::eventCallback: %s\n"
+                              "(Event type: %s, object type: %s)\n"
+                              , e.what(), ev->getTypeId().getName().getString()
+                              , self->getTypeId().getName());
     }
     catch (const std::exception& e) {
-        Base::Console().Error("Unhandled std exception in ViewProvider::eventCallback: %s\n", e.what());
+        Base::Console().Error("Unhandled std exception in ViewProvider::eventCallback: %s\n"
+                              "(Event type: %s, object type: %s)\n"
+                              , e.what(), ev->getTypeId().getName().getString()
+                              , self->getTypeId().getName());
     }
     catch (...) {
-        Base::Console().Error("Unhandled unknown C++ exception in ViewProvider::eventCallback");
+        Base::Console().Error("Unhandled unknown C++ exception in ViewProvider::eventCallback"
+                              " (Event type: %s, object type: %s)\n"
+                              , ev->getTypeId().getName().getString()
+                              , self->getTypeId().getName());
     }
 }
 

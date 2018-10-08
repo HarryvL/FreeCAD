@@ -172,9 +172,11 @@ void GeometryObject::projectShape(const TopoDS_Shape& input,
         brep_hlr->Add(input, m_isoCount);
         if (m_isPersp) {
             double fLength = std::max(Precision::Confusion(),m_focus);
+//            HLRAlgo_Projector projector( projAxis, fLength );
             HLRAlgo_Projector projector( viewAxis, fLength );
             brep_hlr->Projector(projector);
         } else {
+//            HLRAlgo_Projector projector( projAxis );
             HLRAlgo_Projector projector( viewAxis );
             brep_hlr->Projector(projector);
         }
@@ -543,40 +545,50 @@ bool GeometryObject::findVertex(Base::Vector2d v)
 /// utility non-class member functions
 //! gets a coordinate system that matches view system used in 3D with +Z up (or +Y up if necessary)
 //! used for individual views, but not secondary views in projection groups
+//! flip determines Y mirror or not.
+// getViewAxis 1
 gp_Ax2 TechDrawGeometry::getViewAxis(const Base::Vector3d origin,
                                      const Base::Vector3d& direction,
                                      const bool flip)
 {
+    (void) flip;
+    gp_Ax2 viewAxis;
     gp_Pnt inputCenter(origin.x,origin.y,origin.z);
     Base::Vector3d stdZ(0.0,0.0,1.0);
+    Base::Vector3d stdOrg(0.0,0.0,0.0);
     Base::Vector3d flipDirection(direction.x,-direction.y,direction.z);
     if (!flip) {
         flipDirection = Base::Vector3d(direction.x,direction.y,direction.z);
     }
     Base::Vector3d cross = flipDirection;
-    //special cases
-    if ((flipDirection - stdZ).Length() < Precision::Confusion()) {
-        cross = Base::Vector3d(1.0,0.0,0.0);
-    } else if ((flipDirection - (stdZ * -1.0)).Length() < Precision::Confusion()) {
+//    //special case
+    if (TechDraw::DrawUtil::checkParallel(flipDirection, stdZ)) {
         cross = Base::Vector3d(1.0,0.0,0.0);
     } else {
         cross.Normalize();
         cross = cross.Cross(stdZ);
     }
-    gp_Ax2 viewAxis;
+    
+    if (cross.IsEqual(stdOrg,FLT_EPSILON)) {
+        viewAxis = gp_Ax2(inputCenter,
+                          gp_Dir(flipDirection.x, flipDirection.y, flipDirection.z));
+        return viewAxis;
+    }
+    
     viewAxis = gp_Ax2(inputCenter,
                       gp_Dir(flipDirection.x, flipDirection.y, flipDirection.z),
-//                      gp_Dir(1.0, 1.0, 0.0));
                       gp_Dir(cross.x, cross.y, cross.z));
     return viewAxis;
 }
 
 //! gets a coordinate system specified by Z and X directions
+//getViewAxis 2
 gp_Ax2 TechDrawGeometry::getViewAxis(const Base::Vector3d origin,
                                      const Base::Vector3d& direction,
                                      const Base::Vector3d& xAxis,
                                      const bool flip)
 {
+    (void) flip;
     gp_Pnt inputCenter(origin.x,origin.y,origin.z);
     Base::Vector3d flipDirection(direction.x,-direction.y,direction.z);
     if (!flip) {
@@ -595,6 +607,15 @@ gp_Pnt TechDrawGeometry::findCentroid(const TopoDS_Shape &shape,
 {
     Base::Vector3d origin(0.0,0.0,0.0);
     gp_Ax2 viewAxis = getViewAxis(origin,direction);
+    return findCentroid(shape,viewAxis);
+}
+
+//! Returns the centroid of shape, as viewed according to direction
+gp_Pnt TechDrawGeometry::findCentroid(const TopoDS_Shape &shape,
+                                      const gp_Ax2 viewAxis)
+{
+//    Base::Vector3d origin(0.0,0.0,0.0);
+//    gp_Ax2 viewAxis = getViewAxis(origin,direction);
 
     gp_Trsf tempTransform;
     tempTransform.SetTransformation(viewAxis);
@@ -616,6 +637,15 @@ gp_Pnt TechDrawGeometry::findCentroid(const TopoDS_Shape &shape,
 
     return gp_Pnt(x, y, z);
 }
+
+Base::Vector3d TechDrawGeometry::findCentroidVec(const TopoDS_Shape &shape,
+                                              const Base::Vector3d &direction)
+{
+    gp_Pnt p = TechDrawGeometry::findCentroid(shape,direction);
+    Base::Vector3d result(p.X(),p.Y(),p.Z());
+    return result;
+}
+
 
 //!scales & mirrors a shape about a center
 TopoDS_Shape TechDrawGeometry::mirrorShape(const TopoDS_Shape &input,
@@ -691,6 +721,25 @@ TopoDS_Shape TechDrawGeometry::scaleShape(const TopoDS_Shape &input,
     }
     catch (...) {
         Base::Console().Log("GeometryObject::scaleShape - scale failed.\n");
+        return transShape;
+    }
+    return transShape;
+}
+
+//!moves a shape
+TopoDS_Shape TechDrawGeometry::moveShape(const TopoDS_Shape &input,
+                                         const Base::Vector3d& motion)
+{
+    TopoDS_Shape transShape;
+    try {
+        gp_Trsf xlate;
+        xlate.SetTranslation(gp_Vec(motion.x,motion.y,motion.z));
+
+        BRepBuilderAPI_Transform mkTrf(input, xlate);
+        transShape = mkTrf.Shape();
+    }
+    catch (...) {
+        Base::Console().Log("GeometryObject::moveShape - move failed.\n");
         return transShape;
     }
     return transShape;

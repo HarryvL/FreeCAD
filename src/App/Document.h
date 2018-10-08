@@ -112,11 +112,17 @@ public:
 
     /** @name Signals of the document */
     //@{
+    /// signal before changing an doc property
+    boost::signal<void (const App::Document&, const App::Property&)> signalBeforeChange;
+    /// signal on changed doc property
+    boost::signal<void (const App::Document&, const App::Property&)> signalChanged;
     /// signal on new Object
     boost::signal<void (const App::DocumentObject&)> signalNewObject;
     //boost::signal<void (const App::DocumentObject&)>     m_sig;
     /// signal on deleted Object
     boost::signal<void (const App::DocumentObject&)> signalDeletedObject;
+    /// signal before changing an Object
+    boost::signal<void (const App::DocumentObject&, const App::Property&)> signalBeforeChangeObject;
     /// signal on changed Object
     boost::signal<void (const App::DocumentObject&, const App::Property&)> signalChangedObject;
     /// signal on relabeled Object
@@ -146,7 +152,18 @@ public:
                         Base::XMLReader&)> signalImportObjects;
     boost::signal<void (const std::vector<App::DocumentObject*>&, Base::Reader&,
                         const std::map<std::string, std::string>&)> signalImportViewObjects;
+    //signal starting a save action to a file
+    boost::signal<void (const App::Document&, const std::string&)> signalStartSave;
+    //signal finishing a save action to a file
+    boost::signal<void (const App::Document&, const std::string&)> signalFinishSave;
     boost::signal<void (const App::Document&)> signalRecomputed;
+    boost::signal<void (const App::DocumentObject&)> signalRecomputedObject;
+    //signal a new opened transaction
+    boost::signal<void (const App::Document&, std::string)> signalOpenTransaction;
+    // signal a commited transaction
+    boost::signal<void (const App::Document&)> signalCommitTransaction;
+    // signal an aborted transaction
+    boost::signal<void (const App::Document&)> signalAbortTransaction;
     //@}
 
     /** @name File handling of the document */
@@ -156,7 +173,7 @@ public:
     /// Save the document to the file in Property Path
     bool save (void);
     bool saveAs(const char* file);
-    bool saveCopy(const char* file);
+    bool saveCopy(const char* file) const;
     /// Restore the document from the file in Property Path
     void restore (void);
     void exportObjects(const std::vector<App::DocumentObject*>&, std::ostream&);
@@ -364,7 +381,9 @@ protected:
     void breakDependency(DocumentObject* pcObject, bool clear);
     std::vector<App::DocumentObject*> readObjects(Base::XMLReader& reader);
     void writeObjects(const std::vector<App::DocumentObject*>&, Base::Writer &writer) const;
+    bool saveToFile(const char* filename) const;
 
+    void onBeforeChange(const Property* prop);
     void onChanged(const Property* prop);
     /// callback from the Document objects before property will be changed
     void onBeforeChangeProperty(const TransactionalObject *Who, const Property *What);

@@ -116,6 +116,10 @@ public:
     boost::signal<void (const Document&)> signalStartRestoreDocument;
     /// signal on restoring Document
     boost::signal<void (const Document&)> signalFinishRestoreDocument;
+    /// signal on starting to save Document
+    boost::signal<void (const Document&, const std::string&)> signalStartSaveDocument;
+    /// signal on saved Document
+    boost::signal<void (const Document&, const std::string&)> signalFinishSaveDocument;
     /// signal on undo in document
     boost::signal<void (const Document&)> signalUndoDocument;
     /// signal on redo in document
@@ -128,17 +132,33 @@ public:
      * the signal of a special document connect to the document itself
      */
     //@{
+    /// signal before change of doc property
+    boost::signal<void (const App::Document&, const App::Property&)> signalBeforeChangeDocument;
+    /// signal on changed doc proeprty
+    boost::signal<void (const App::Document&, const App::Property&)> signalChangedDocument;
     /// signal on new Object
     boost::signal<void (const App::DocumentObject&)> signalNewObject;
     //boost::signal<void (const App::DocumentObject&)>     m_sig;
     /// signal on deleted Object
     boost::signal<void (const App::DocumentObject&)> signalDeletedObject;
     /// signal on changed Object
+    boost::signal<void (const App::DocumentObject&, const App::Property&)> signalBeforeChangeObject;
+    /// signal on changed Object
     boost::signal<void (const App::DocumentObject&, const App::Property&)> signalChangedObject;
     /// signal on relabeled Object
     boost::signal<void (const App::DocumentObject&)> signalRelabelObject;
     /// signal on activated Object
     boost::signal<void (const App::DocumentObject&)> signalActivatedObject;
+    /// signal on recomputed document
+    boost::signal<void (const App::Document&)> signalRecomputed;
+    /// signal on recomputed document object
+    boost::signal<void (const App::DocumentObject&)> signalObjectRecomputed;
+    // signal on opened transaction
+    boost::signal<void (const App::Document&, std::string)> signalOpenTransaction;
+    // signal a commited transaction
+    boost::signal<void (const App::Document&)> signalCommitTransaction;
+    // signal an aborted transaction
+    boost::signal<void (const App::Document&)> signalAbortTransaction;
     //@}
 
     /** @name Signals of property changes
@@ -264,13 +284,23 @@ protected:
      * This slot get connected to all App::Documents created
      */
     //@{
+    void slotBeforeChangeDocument(const App::Document&, const App::Property&);
+    void slotChangedDocument(const App::Document&, const App::Property&);
     void slotNewObject(const App::DocumentObject&);
     void slotDeletedObject(const App::DocumentObject&);
+    void slotBeforeChangeObject(const App::DocumentObject&, const App::Property& Prop);
     void slotChangedObject(const App::DocumentObject&, const App::Property& Prop);
     void slotRelabelObject(const App::DocumentObject&);
     void slotActivatedObject(const App::DocumentObject&);
     void slotUndoDocument(const App::Document&);
     void slotRedoDocument(const App::Document&);
+    void slotRecomputedObject(const App::DocumentObject&);
+    void slotRecomputed(const App::Document&);
+    void slotOpenTransaction(const App::Document&, std::string);
+    void slotCommitTransaction(const App::Document&);
+    void slotAbortTransaction(const App::Document&);
+    void slotStartSaveDocument(const App::Document&, const std::string&);
+    void slotFinishSaveDocument(const App::Document&, const std::string&);
     //@}
 
 private:
@@ -291,41 +321,37 @@ private:
     //---------------------------------------------------------------------
 
     // static python wrapper of the exported functions
-    static PyObject* sGetParam          (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sSaveParameter     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetVersion        (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetConfig         (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sSetConfig         (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sDumpConfig        (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sTemplateAdd       (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sTemplateDelete    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sTemplateGet       (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sAddImportType     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetImportType     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sAddExportType     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetExportType     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetResourceDir    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetUserAppDataDir (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetUserMacroDir   (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetHelpDir        (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetHomePath       (PyObject *self,PyObject *args,PyObject *kwd);
+    static PyObject* sGetParam          (PyObject *self,PyObject *args);
+    static PyObject* sSaveParameter     (PyObject *self,PyObject *args);
+    static PyObject* sGetVersion        (PyObject *self,PyObject *args);
+    static PyObject* sGetConfig         (PyObject *self,PyObject *args);
+    static PyObject* sSetConfig         (PyObject *self,PyObject *args);
+    static PyObject* sDumpConfig        (PyObject *self,PyObject *args);
+    static PyObject* sAddImportType     (PyObject *self,PyObject *args);
+    static PyObject* sGetImportType     (PyObject *self,PyObject *args);
+    static PyObject* sAddExportType     (PyObject *self,PyObject *args);
+    static PyObject* sGetExportType     (PyObject *self,PyObject *args);
+    static PyObject* sGetResourceDir    (PyObject *self,PyObject *args);
+    static PyObject* sGetUserAppDataDir (PyObject *self,PyObject *args);
+    static PyObject* sGetUserMacroDir   (PyObject *self,PyObject *args);
+    static PyObject* sGetHelpDir        (PyObject *self,PyObject *args);
+    static PyObject* sGetHomePath       (PyObject *self,PyObject *args);
 
-    static PyObject* sLoadFile          (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sOpenDocument      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sSaveDocument      (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sSaveDocumentAs    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sNewDocument       (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sCloseDocument     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sActiveDocument    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sSetActiveDocument (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sGetDocument       (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sListDocuments     (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sAddDocObserver    (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sRemoveDocObserver (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject* sTranslateUnit     (PyObject *self,PyObject *args,PyObject *kwd);
+    static PyObject* sLoadFile          (PyObject *self,PyObject *args);
+    static PyObject* sOpenDocument      (PyObject *self,PyObject *args);
+    static PyObject* sSaveDocument      (PyObject *self,PyObject *args);
+    static PyObject* sSaveDocumentAs    (PyObject *self,PyObject *args);
+    static PyObject* sNewDocument       (PyObject *self,PyObject *args);
+    static PyObject* sCloseDocument     (PyObject *self,PyObject *args);
+    static PyObject* sActiveDocument    (PyObject *self,PyObject *args);
+    static PyObject* sSetActiveDocument (PyObject *self,PyObject *args);
+    static PyObject* sGetDocument       (PyObject *self,PyObject *args);
+    static PyObject* sListDocuments     (PyObject *self,PyObject *args);
+    static PyObject* sAddDocObserver    (PyObject *self,PyObject *args);
+    static PyObject* sRemoveDocObserver (PyObject *self,PyObject *args);
 
-    static PyObject *sSetLogLevel       (PyObject *self,PyObject *args,PyObject *kwd);
-    static PyObject *sGetLogLevel       (PyObject *self,PyObject *args,PyObject *kwd);
+    static PyObject *sSetLogLevel       (PyObject *self,PyObject *args);
+    static PyObject *sGetLogLevel       (PyObject *self,PyObject *args);
 
     static PyMethodDef    Methods[]; 
 

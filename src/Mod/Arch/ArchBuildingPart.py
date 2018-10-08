@@ -35,6 +35,9 @@ else:
     def QT_TRANSLATE_NOOP(ctxt,txt):
         return txt
     # \endcond
+import sys
+if sys.version_info.major >= 3:
+    unicode = str
 
 ## @package ArchBuildingPart
 #  \ingroup ARCH
@@ -190,7 +193,7 @@ BuildingTypes = ['Undefined',
 ]
 
 
-def makeBuildingPart(objectslist=None):
+def makeBuildingPart(objectslist=None,baseobj=None,name="BuildingPart"):
 
     '''makeBuildingPart(objectslist): creates a buildingPart including the
     objects from the given list.'''
@@ -208,9 +211,9 @@ def makeBuildingPart(objectslist=None):
 
 
 def makeFloor(objectslist=None,baseobj=None,name="Floor"):
-    
+
     """overwrites ArchFloor.makeFloor"""
-    
+
     obj = makeBuildingPart(objectslist)
     obj.Label = name
     obj.IfcRole = "Building Storey"
@@ -218,14 +221,17 @@ def makeFloor(objectslist=None,baseobj=None,name="Floor"):
 
 
 def makeBuilding(objectslist=None,baseobj=None,name="Building"):
-    
-    """overwrites ArchBuilding.makeBiulding"""
-    
+
+    """overwrites ArchBuilding.makeBuilding"""
+
     obj = makeBuildingPart(objectslist)
     obj.Label = name
     obj.IfcRole = "Building"
-    obj.addProperty("App::PropertyEnumeration","BuildingType","Arch",QT_TRANSLATE_NOOP("App::Property","The type of this building"))
+    obj.addProperty("App::PropertyEnumeration","BuildingType","Building",QT_TRANSLATE_NOOP("App::Property","The type of this building"))
     obj.BuildingType = BuildingTypes
+    if FreeCAD.GuiUp:
+        obj.ViewObject.ShowLevel = False
+        obj.ViewObject.ShowLabel = False
     return obj
 
 
@@ -390,17 +396,34 @@ class BuildingPart:
     def execute(self,obj):
 
         # gather all the child shapes into a compound
-        shapes = []
-        for o in obj.Group:
-            if o.isDerivedFrom("Part::Feature") and o.Shape and (not o.Shape.isNull()):
-                shapes.append(o.Shape)
+        shapes = self.getShapes(obj)
         if shapes:
             import Part
             obj.Shape = Part.makeCompound(shapes)
 
+    def getShapes(self,obj):
+
+        "recursively get the shapes of objects inside this BuildingPart"
+
+        shapes = []
+        if obj.isDerivedFrom("Part::Feature") and obj.Shape and (not obj.Shape.isNull()):
+            shapes.append(obj.Shape)
+        if hasattr(obj,"Group"):
+            for child in obj.Group:
+                shapes.extend(self.getShapes(child))
+        for i in obj.InList:
+            if hasattr(i,"Hosts"):
+                if obj in i.Hosts:
+                    shapes.extend(self.getShapes(i))
+            elif hasattr(i,"Host"):
+                if obj == i.Host:
+                    shapes.extend(self.getShapes(i))
+        return shapes
+
     def getSpaces(self,obj):
 
         "gets the list of Spaces that have this object as their Zone property"
+
         g = []
         for o in obj.OutList:
             if hasattr(o,"Zone"):
@@ -421,7 +444,7 @@ class ViewProviderBuildingPart:
         #vobj.addExtension("Gui::ViewProviderGeoFeatureGroupExtensionPython", self)
         vobj.Proxy = self
         self.setProperties(vobj)
-        vobj.ShapeColor = (0.13,0.15,0.37)
+        vobj.ShapeColor = ArchCommands.getDefaultColor("Helpers")
 
     def setProperties(self,vobj):
 
@@ -497,6 +520,7 @@ class ViewProviderBuildingPart:
         self.txt.justification = coin.SoText2.LEFT
         self.txt.string.setValue("level")
         self.sep.addChild(self.txt)
+        vobj.addDisplayMode(coin.SoSeparator(),"Default")
         self.onChanged(vobj,"ShapeColor")
         self.onChanged(vobj,"FontName")
         self.onChanged(vobj,"ShowLevel")
@@ -514,10 +538,6 @@ class ViewProviderBuildingPart:
     def setDisplayMode(self,mode):
 
         return mode
-
-    def isShow(self):
-
-        return True
 
     def updateData(self,obj,prop):
 

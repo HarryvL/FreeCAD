@@ -32,19 +32,19 @@
       <property name="spacing">
        <number>6</number>
       </property>
-      <item row="4" column="1">
-       <spacer>
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>66</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
+      <item row="4" column="0">
+      <widget class="QLabel" name="TextLabelAxial">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>Axial:</string>
+       </property>
+      </widget>
+     </item>
       <item row="3" column="0">
        <widget class="QLabel" name="TextLabelZ">
         <property name="sizePolicy">
@@ -93,6 +93,19 @@
       <item row="3" column="1">
        <widget class="Gui::QuantitySpinBox" name="zPos"/>
       </item>
+      <item row="4" column="1">
+       <widget class="Gui::QuantitySpinBox" name="axialPos"/>
+      </item>
+      <item row="5" column="1">
+       <widget class="QPushButton" name="applyAxial">
+       <property name="text">
+        <string>Apply axial</string>
+       </property>
+       <property name="toolTip">
+       <string>Shift click for opposite direction</string>
+       </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -108,19 +121,6 @@
       <property name="spacing">
        <number>6</number>
       </property>
-      <item row="4" column="1">
-       <spacer>
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>66</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
       <item row="2" column="0">
        <widget class="QLabel" name="TextLabelZ_5">
         <property name="sizePolicy">
@@ -173,6 +173,13 @@
        <widget class="QCheckBox" name="centerOfMass">
         <property name="text">
          <string>Use center of mass</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QPushButton" name="selectedVertex">
+        <property name="text">
+         <string>Selected points</string>
         </property>
        </widget>
       </item>

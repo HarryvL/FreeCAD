@@ -97,6 +97,7 @@
 # include <Precision.hxx>
 # include <GeomAPI_ProjectPointOnCurve.hxx>
 # include <ShapeConstruct_Curve.hxx>
+# include <LProp_NotDefined.hxx>
 #endif
 
 #include <Base/VectorPy.h>
@@ -134,6 +135,7 @@
 #include <Base/Tools.h>
 
 #include <ctime>
+#include <cmath>
 
 #include "Geometry.h"
 
@@ -435,8 +437,11 @@ bool GeomCurve::normalAt(double u, Base::Vector3d& dir) const
             return true;
         }
     }
+    catch (const LProp_NotDefined&) {
+        dir.Set(0,0,0);
+        return false;
+    }
     catch (Standard_Failure& e) {
-
         throw Base::RuntimeError(e.GetMessageString());
     }
 
@@ -454,8 +459,17 @@ bool GeomCurve::closestParameter(const Base::Vector3d& point, double &u) const
             return true;
         }
     }
-    catch (Standard_Failure& e) {
+    catch (StdFail_NotDone&) { // projection does not exist on trimmer curve, let's try basis curve
+        closestParameterToBasicCurve(point,u);
 
+        if(std::abs(u-c->FirstParameter()) < std::abs(u-c->LastParameter()))
+            u = c->FirstParameter();
+        else
+            u = c->LastParameter();
+
+        return true;
+    }
+    catch (Standard_Failure& e) {
         throw Base::RuntimeError(e.GetMessageString());
     }
 

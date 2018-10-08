@@ -159,6 +159,7 @@ public:
     //@{
     /// Getter for the active view
     Gui::MDIView* getActiveView(void) const;
+    void setActiveWindow(Gui::MDIView* view);
     Gui::MDIView* getEditingViewOfViewProvider(Gui::ViewProvider*) const;
     Gui::MDIView* getViewOfViewProvider(Gui::ViewProvider*) const;
     Gui::MDIView* getViewOfNode(SoNode*) const;
@@ -255,6 +256,7 @@ protected:
 private:
     //handles the scene graph nodes to correctly group child and parents
     void handleChildren3D(ViewProvider* viewProvider);
+    void rebuildRootNodes();
 
     struct DocumentP* d;
     static int _iDocCount;

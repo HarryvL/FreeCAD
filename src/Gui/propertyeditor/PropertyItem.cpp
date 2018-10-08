@@ -206,6 +206,11 @@ void PropertyItem::appendChild(PropertyItem *item)
     childItems.append(item);
 }
 
+void PropertyItem::insertChild(int index, PropertyItem *child)
+{
+    childItems.insert(index, child);
+}
+
 /*!
  * \brief PropertyItem::removeChildren
  * Deletes the children in the range of [from, to]
@@ -368,8 +373,11 @@ void PropertyItem::setPropertyName(const QString& name)
     for (int i=0; i<name.length(); i++) {
         if (name[i].isUpper() && !display.isEmpty()) {
             // if there is a sequence of capital letters do not insert spaces
-            if (!upper)
-                display += QLatin1String(" ");
+            if (!upper) {
+                QChar last = display.at(display.length()-1);
+                if (!last.isSpace())
+                    display += QLatin1String(" ");
+            }
         }
         upper = name[i].isUpper();
         display += name[i];
@@ -2207,7 +2215,9 @@ void PropertyStringListItem::setValue(const QVariant& value)
     for (QStringList::Iterator it = values.begin(); it != values.end(); ++it) {
         QString text(*it);
         text.replace(QString::fromUtf8("'"),QString::fromUtf8("\\'"));
-        str << "unicode('" << text << "', 'utf-8'),";
+
+        std::string pystr = Base::Tools::escapedUnicodeFromUtf8(text.toUtf8());
+        str << "u\"" << pystr.c_str() << "\", ";
     }
     str << "]";
     setPropertyValue(data);

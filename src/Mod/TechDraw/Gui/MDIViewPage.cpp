@@ -149,7 +149,7 @@ MDIViewPage::MDIViewPage(ViewProviderPage *pageVp, Gui::Document* doc, QWidget* 
         m_view->scene(), SIGNAL(selectionChanged()),
         this           , SLOT  (sceneSelectionChanged())
        );
-       
+
     //get informed by App side about deleted DocumentObjects
     App::Document* appDoc = m_vpPage->getDocument()->getDocument();
     auto bnd = boost::bind(&MDIViewPage::onDeleteObject, this, _1);
@@ -235,6 +235,7 @@ void MDIViewPage::closeEvent(QCloseEvent* ev)
     if (!ev->isAccepted())
         return;
     detachSelection();
+
     blockSelection(true);
     // when closing the view from GUI notify the view provider to mark it invisible
     if (_pcDocument && !m_objectName.empty()) {
@@ -246,6 +247,7 @@ void MDIViewPage::closeEvent(QCloseEvent* ev)
                 vp->hide();
         }
     }
+    blockSelection(false);
 }
 
 
@@ -405,15 +407,15 @@ void MDIViewPage::updateDrawing(void)
         if (obj == nullptr) {
             m_view->removeQView(qv);
         } else {
-            DrawPage* pp = qv->getViewObject()->findParentPage(); 
+            DrawPage* pp = qv->getViewObject()->findParentPage();
             if (thisPage != pp) {
                m_view->removeQView(qv);
             }
         }
     }
-    
+
     // Update all the QGIVxxxx
-    // WF: why do we do this?  views should be keeping themselves up to date. 
+    // WF: why do we do this?  views should be keeping themselves up to date.
 //    const std::vector<QGIView *> &upviews = m_view->getViews();
 //    for(std::vector<QGIView *>::const_iterator it = upviews.begin(); it != upviews.end(); ++it) {
 //        Base::Console().Message("TRACE - MDIVP::updateDrawing - updating a QGIVxxxx\n");
@@ -716,6 +718,8 @@ void MDIViewPage::print(QPrinter* printer)
 
     // Reset
     m_view->toggleMarkers(true);
+    //bool block =
+    static_cast<void> (blockConnection(false));
 }
 
 
@@ -841,7 +845,7 @@ void MDIViewPage::saveSVG(std::string file)
 /////////////// Selection Routines ///////////////////
 // wf: this is never executed???
 // needs a signal from Scene? hoverEvent?  Scene does not emit signal for "preselect"
-// there is no "preSelect" signal from Gui either. 
+// there is no "preSelect" signal from Gui either.
 void MDIViewPage::preSelectionChanged(const QPoint &pos)
 {
     QObject *obj = QObject::sender();
@@ -904,7 +908,7 @@ void MDIViewPage::preSelectionChanged(const QPoint &pos)
 //flag to prevent selection activity within mdivp
 void MDIViewPage::blockSelection(const bool state)
 {
-  isSelectionBlocked = state;
+    isSelectionBlocked = state;
 }
 
 
@@ -912,6 +916,8 @@ void MDIViewPage::blockSelection(const bool state)
 void MDIViewPage::clearSceneSelection()
 {
   blockSelection(true);
+  m_sceneSelected.clear();
+
   std::vector<QGIView *> views = m_view->getViews();
 
   // Iterate through all views and unselect all
@@ -970,17 +976,67 @@ void MDIViewPage::onSelectionChanged(const Gui::SelectionChanges& msg)
     }
 }
 
+//! maintain QGScene selected items in selection order
+void MDIViewPage::sceneSelectionManager()
+{
+    QList<QGraphicsItem*> sceneSel = m_view->scene()->selectedItems();
+
+    if (sceneSel.isEmpty()) {
+        m_sceneSelected.clear(); //TODO: need to signal somebody?  Tree? handled elsewhere
+        //clearSelection
+        return;
+    }
+
+    if (m_sceneSelected.isEmpty() &&
+        !sceneSel.isEmpty()) {
+        m_sceneSelected.push_back(sceneSel.front());
+        return;
+    }
+
+    //add to m_sceneSelected anything that is in q_sceneSel
+    for (auto qts: sceneSel) {
+        bool found = false;
+        for (auto ms: m_sceneSelected) {
+            if ( qts == ms ) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            m_sceneSelected.push_back(qts);
+            break;    
+        }
+    }
+    
+    //remove items from m_sceneSelected that are not in q_sceneSel
+    QList<QGraphicsItem*> m_new;
+    for (auto m: m_sceneSelected) {
+        for (auto q: sceneSel)  {
+            if (m == q) {
+                m_new.push_back(m);
+                break;
+            }
+        }
+    }
+    m_sceneSelected = m_new;
+}
+
 //! update Tree Selection from QGraphicsScene selection
-//trigged by m_view->scene() signal
+//triggered by m_view->scene() signal
 void MDIViewPage::sceneSelectionChanged()
 {
+    sceneSelectionManager();
+
+    QList<QGraphicsItem*> dbsceneSel = m_view->scene()->selectedItems();
+ 
     if(isSelectionBlocked)  {
         return;
     }
 
     std::vector<Gui::SelectionObject> treeSel = Gui::Selection().getSelectionEx();
-    QList<QGraphicsItem*> sceneSel = m_view->scene()->selectedItems();
-
+//    QList<QGraphicsItem*> sceneSel = m_view->scene()->selectedItems();
+    QList<QGraphicsItem*> sceneSel = m_sceneSelected;
+    
     //check if really need to change selection
     bool sameSel = compareSelections(treeSel,sceneSel);
     if (sameSel) {
@@ -990,12 +1046,14 @@ void MDIViewPage::sceneSelectionChanged()
     setTreeToSceneSelect();
 }
 
+//Note: no guarantee of selection order???
 void MDIViewPage::setTreeToSceneSelect(void)
 {
     bool saveBlock = blockConnection(true); // block selectionChanged signal from Tree/Observer
     blockSelection(true);
     Gui::Selection().clearSelection();
-    QList<QGraphicsItem*> sceneSel = m_view->scene()->selectedItems();
+//    QList<QGraphicsItem*> sceneSel = m_view->scene()->selectedItems();   //"no particular order"!!!
+    QList<QGraphicsItem*> sceneSel = m_sceneSelected;
     for (QList<QGraphicsItem*>::iterator it = sceneSel.begin(); it != sceneSel.end(); ++it) {
         QGIView *itemView = dynamic_cast<QGIView *>(*it);
         if(itemView == 0) {
@@ -1037,6 +1095,7 @@ void MDIViewPage::setTreeToSceneSelect(void)
 
                 std::stringstream ss;
                 ss << "Vertex" << vert->getProjIndex();
+                                        ss.str().c_str();
                 //bool accepted =
                 static_cast<void> (Gui::Selection().addSelection(viewObj->getDocument()->getName(),
                                               viewObj->getNameInDocument(),
@@ -1073,7 +1132,7 @@ void MDIViewPage::setTreeToSceneSelect(void)
 
             QGIDatumLabel *dimLabel = dynamic_cast<QGIDatumLabel*>(*it);
             if(dimLabel) {
-                QGraphicsItem*dimParent = dimLabel->parentItem();
+                QGraphicsItem*dimParent = dimLabel->QGraphicsItem::parentItem();
                 if(!dimParent)
                     continue;
 
@@ -1113,7 +1172,7 @@ void MDIViewPage::setTreeToSceneSelect(void)
     blockConnection(saveBlock);
 }
 
-bool MDIViewPage::compareSelections(std::vector<Gui::SelectionObject>& treeSel,QList<QGraphicsItem*>& sceneSel)
+bool MDIViewPage::compareSelections(std::vector<Gui::SelectionObject> treeSel, QList<QGraphicsItem*> sceneSel)
 {
     bool result = true;
 
@@ -1127,12 +1186,12 @@ bool MDIViewPage::compareSelections(std::vector<Gui::SelectionObject>& treeSel,Q
 
     int treeCount = 0;
     int sceneCount = 0;
-    int subCount = 0;  
+    int subCount = 0;
     int ppCount = 0;
     std::vector<std::string> treeNames;
     std::vector<std::string> sceneNames;
 
-    for (auto& tn: treeSel) {
+    for (auto tn: treeSel) {
         if (tn.getObject()->isDerivedFrom(TechDraw::DrawView::getClassTypeId())) {
             int treeSubs = tn.getSubNames().size();
             subCount += treeSubs;
@@ -1142,28 +1201,28 @@ bool MDIViewPage::compareSelections(std::vector<Gui::SelectionObject>& treeSel,Q
     }
     std::sort(treeNames.begin(),treeNames.end());
     treeCount = treeNames.size();
-    
-    for (auto& sn:sceneSel){
-        QGIView *itemView = dynamic_cast<QGIView *>(sn);
+
+    for (auto sn:sceneSel){
+        QGIView *itemView = dynamic_cast<QGIView *>(sn);   //<<<<<
         if(itemView == 0) {
             QGIPrimPath* pp = dynamic_cast<QGIPrimPath*>(sn);   //count Vertex/Edge/Face
             if (pp != nullptr) {
                 ppCount++;
             }
-        } else { 
+        } else {
             std::string s = itemView->getViewNameAsString();
             sceneNames.push_back(s);
         }
     }
     std::sort(sceneNames.begin(),sceneNames.end());
     sceneCount = sceneNames.size();
-     
-    //different # of DrawView* vs QGIV* 
+
+    //different # of DrawView* vs QGIV*
     if (sceneCount != treeCount) {
         return false;
     }
-    
-// even of counts match, have to check that names in scene == names in tree    
+
+// even of counts match, have to check that names in scene == names in tree
     auto treePtr = treeNames.begin();
     for (auto& s: sceneNames){
         if (s == (*treePtr)) {
@@ -1173,11 +1232,11 @@ bool MDIViewPage::compareSelections(std::vector<Gui::SelectionObject>& treeSel,Q
             return false;
         }
     }
-    
+
     //Objects all match, check subs
     if (treeCount != ppCount) {
         return false;
-    }    
+    }
 
     return result;
 }

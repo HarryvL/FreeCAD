@@ -33,6 +33,7 @@
 # include <GL/gl.h>
 # endif
 # include <Inventor/SbBox.h>
+# include <Inventor/SoEventManager.h>
 # include <Inventor/actions/SoGetBoundingBoxAction.h>
 # include <Inventor/actions/SoGetMatrixAction.h>
 # include <Inventor/actions/SoHandleEventAction.h>
@@ -245,7 +246,7 @@ public:
         }
 #endif
 
-        // Bug #0000607: Some mices also support horizontal scrolling which however might
+        // Bug #0000607: Some mice also support horizontal scrolling which however might
         // lead to some unwanted zooming when pressing the MMB for panning.
         // Thus, we filter out horizontal scrolling.
         if (event->type() == QEvent::Wheel) {
@@ -553,6 +554,11 @@ View3DInventorViewer::~View3DInventorViewer()
     setSceneGraph(0);
     this->pEventCallback->unref();
     this->pEventCallback = 0;
+    // Note: It can happen that there is still someone who references
+    // the root node but isn't destroyed when closing this viewer so
+    // that it prevents all children from being deleted. To reduce this
+    // likelihood we explicitly remove all child nodes now.
+    this->pcViewProviderRoot->removeAllChildren();
     this->pcViewProviderRoot->unref();
     this->pcViewProviderRoot = 0;
     this->backlight->unref();
@@ -573,6 +579,14 @@ View3DInventorViewer::~View3DInventorViewer()
         static_cast<View3DInventorViewerPy*>(_viewerPy)->_viewer = 0;
         Py_DECREF(_viewerPy);
     }
+
+    // In the init() function we have overridden the default SoGLRenderAction with our
+    // own instance of SoBoxSelectionRenderAction and SoRenderManager destroyed the default.
+    // But it does this only once so that now we have to explicitly destroy our instance in
+    // order to free the memory.
+    SoGLRenderAction* glAction = this->getSoRenderManager()->getGLRenderAction();
+    this->getSoRenderManager()->setGLRenderAction(nullptr);
+    delete glAction;
 }
 
 void View3DInventorViewer::aboutToDestroyGLContext()
@@ -707,6 +721,13 @@ SbBool View3DInventorViewer::setEditingViewProvider(Gui::ViewProvider* p, int Mo
 void View3DInventorViewer::resetEditingViewProvider()
 {
     if (this->editViewProvider) {
+        // In case the event action still has grabbed a node when leaving edit mode
+        // force to release it now
+        SoEventManager* mgr = this->getSoEventManager();
+        SoHandleEventAction* heaction = mgr->getHandleEventAction();
+        if (heaction && heaction->getGrabber())
+            heaction->releaseGrabber();
+
         this->editViewProvider->unsetEditViewer(this);
         removeEventCallback(SoEvent::getClassTypeId(), Gui::ViewProvider::eventCallback,this->editViewProvider);
         this->editViewProvider = 0;
@@ -1154,9 +1175,9 @@ bool View3DInventorViewer::isSelecting() const
     return navigation->isSelecting();
 }
 
-const std::vector<SbVec2s>& View3DInventorViewer::getPolygon(SbBool* clip_inner) const
+const std::vector<SbVec2s>& View3DInventorViewer::getPolygon(SelectionRole* role) const
 {
-    return navigation->getPolygon(clip_inner);
+    return navigation->getPolygon(role);
 }
 
 SbVec2f View3DInventorViewer::screenCoordsOfPath(SoPath* path) const
@@ -1242,9 +1263,9 @@ std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(const std::vector<SbVec2
     return poly;
 }
 
-std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(SbBool* clip_inner) const
+std::vector<SbVec2f> View3DInventorViewer::getGLPolygon(SelectionRole* role) const
 {
-    const std::vector<SbVec2s>& pnts = navigation->getPolygon(clip_inner);
+    const std::vector<SbVec2s>& pnts = navigation->getPolygon(role);
     return getGLPolygon(pnts);
 }
 

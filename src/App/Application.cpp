@@ -206,11 +206,42 @@ PyDoc_STRVAR(FreeCAD_doc,
 PyDoc_STRVAR(Console_doc,
      "FreeCAD Console\n"
     );
-    
+
 PyDoc_STRVAR(Base_doc,
     "The Base module contains the classes for the geometric basics\n"
     "like vector, matrix, bounding box, placement, rotation, axis, ...\n"
     );
+
+#if PY_MAJOR_VERSION >= 3
+// This is called via the PyImport_AppendInittab mechanism called
+// during initialization, to make the built-in __FreeCADBase__
+// module known to Python.
+PyMODINIT_FUNC
+init_freecad_base_module(void)
+{
+    static struct PyModuleDef BaseModuleDef = {
+        PyModuleDef_HEAD_INIT,
+        "__FreeCADBase__", Base_doc, -1,
+        NULL, NULL, NULL, NULL, NULL
+    };
+    return PyModule_Create(&BaseModuleDef);
+}
+
+// Set in inside Application
+static PyMethodDef* __AppMethods = nullptr;
+
+PyMODINIT_FUNC
+init_freecad_module(void)
+{
+    static struct PyModuleDef FreeCADModuleDef = {
+        PyModuleDef_HEAD_INIT,
+        "FreeCAD", FreeCAD_doc, -1,
+        __AppMethods,
+        NULL, NULL, NULL, NULL
+    };
+    return PyModule_Create(&FreeCADModuleDef);
+}
+#endif
 
 Application::Application(std::map<std::string,std::string> &mConfig)
   : _mConfig(mConfig), _pActiveDoc(0)
@@ -223,14 +254,15 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     // setting up Python binding
     Base::PyGILStateLocker lock;
 #if PY_MAJOR_VERSION >= 3
-    static struct PyModuleDef FreeCADModuleDef = {
-        PyModuleDef_HEAD_INIT,
-        "FreeCAD", FreeCAD_doc, -1,
-        Application::Methods,
-        NULL, NULL, NULL, NULL
-    };
-    PyObject* pAppModule = PyModule_Create(&FreeCADModuleDef);
-    _PyImport_FixupBuiltin(pAppModule, "FreeCAD");
+    PyObject* modules = PyImport_GetModuleDict();
+
+    __AppMethods = Application::Methods;
+    PyObject* pAppModule = PyImport_ImportModule ("FreeCAD");
+    if (!pAppModule) {
+        PyErr_Clear();
+        pAppModule = init_freecad_module();
+        PyDict_SetItemString(modules, "FreeCAD", pAppModule);
+    }
 #else
     PyObject* pAppModule = Py_InitModule3("FreeCAD", Application::Methods, FreeCAD_doc);
 #endif
@@ -265,13 +297,12 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     // remove these types from the FreeCAD module.
 
 #if PY_MAJOR_VERSION >= 3
-    static struct PyModuleDef BaseModuleDef = {
-        PyModuleDef_HEAD_INIT,
-        "__FreeCADBase__", Base_doc, -1,
-        NULL, NULL, NULL, NULL, NULL
-    };
-    PyObject* pBaseModule = PyModule_Create(&BaseModuleDef);
-    _PyImport_FixupBuiltin(pBaseModule, "__FreeCADBase__");
+    PyObject* pBaseModule = PyImport_ImportModule ("__FreeCADBase__");
+    if (!pBaseModule) {
+        PyErr_Clear();
+        pBaseModule = init_freecad_base_module();
+        PyDict_SetItemString(modules, "__FreeCADBase__", pBaseModule);
+    }
 #else
     PyObject* pBaseModule = Py_InitModule3("__FreeCADBase__", NULL, Base_doc);
 #endif
@@ -385,13 +416,23 @@ Document* Application::newDocument(const char * Name, const char * UserName)
 
 
     // connect the signals to the application for the new document
+    _pActiveDoc->signalBeforeChange.connect(boost::bind(&App::Application::slotBeforeChangeDocument, this, _1, _2));
+    _pActiveDoc->signalChanged.connect(boost::bind(&App::Application::slotChangedDocument, this, _1, _2));
     _pActiveDoc->signalNewObject.connect(boost::bind(&App::Application::slotNewObject, this, _1));
     _pActiveDoc->signalDeletedObject.connect(boost::bind(&App::Application::slotDeletedObject, this, _1));
+    _pActiveDoc->signalBeforeChangeObject.connect(boost::bind(&App::Application::slotBeforeChangeObject, this, _1, _2));
     _pActiveDoc->signalChangedObject.connect(boost::bind(&App::Application::slotChangedObject, this, _1, _2));
     _pActiveDoc->signalRelabelObject.connect(boost::bind(&App::Application::slotRelabelObject, this, _1));
     _pActiveDoc->signalActivatedObject.connect(boost::bind(&App::Application::slotActivatedObject, this, _1));
     _pActiveDoc->signalUndo.connect(boost::bind(&App::Application::slotUndoDocument, this, _1));
     _pActiveDoc->signalRedo.connect(boost::bind(&App::Application::slotRedoDocument, this, _1));
+    _pActiveDoc->signalRecomputedObject.connect(boost::bind(&App::Application::slotRecomputedObject, this, _1));
+    _pActiveDoc->signalRecomputed.connect(boost::bind(&App::Application::slotRecomputed, this, _1));
+    _pActiveDoc->signalOpenTransaction.connect(boost::bind(&App::Application::slotOpenTransaction, this, _1, _2));
+    _pActiveDoc->signalCommitTransaction.connect(boost::bind(&App::Application::slotCommitTransaction, this, _1));
+    _pActiveDoc->signalAbortTransaction.connect(boost::bind(&App::Application::slotAbortTransaction, this, _1));
+    _pActiveDoc->signalStartSave.connect(boost::bind(&App::Application::slotStartSaveDocument, this, _1, _2));
+    _pActiveDoc->signalFinishSave.connect(boost::bind(&App::Application::slotFinishSaveDocument, this, _1, _2));
 
     // make sure that the active document is set in case no GUI is up
     {
@@ -941,6 +982,16 @@ std::map<std::string, std::string> Application::getExportFilters(void) const
 
 //**************************************************************************
 // signaling
+void Application::slotBeforeChangeDocument(const App::Document& doc, const Property& prop)
+{
+    this->signalBeforeChangeDocument(doc, prop);
+}
+
+void Application::slotChangedDocument(const App::Document& doc, const Property& prop)
+{
+    this->signalChangedDocument(doc, prop);
+}
+
 void Application::slotNewObject(const App::DocumentObject&O)
 {
     this->signalNewObject(O);
@@ -949,6 +1000,11 @@ void Application::slotNewObject(const App::DocumentObject&O)
 void Application::slotDeletedObject(const App::DocumentObject&O)
 {
     this->signalDeletedObject(O);
+}
+
+void Application::slotBeforeChangeObject(const DocumentObject& O, const Property& Prop)
+{
+    this->signalBeforeChangeObject(O, Prop);
 }
 
 void Application::slotChangedObject(const App::DocumentObject&O, const App::Property& P)
@@ -974,6 +1030,41 @@ void Application::slotUndoDocument(const App::Document& d)
 void Application::slotRedoDocument(const App::Document& d)
 {
     this->signalRedoDocument(d);
+}
+
+void Application::slotRecomputedObject(const DocumentObject& obj)
+{
+    this->signalObjectRecomputed(obj);
+}
+
+void Application::slotRecomputed(const Document& doc)
+{
+    this->signalRecomputed(doc);
+}
+
+void Application::slotOpenTransaction(const Document& d, string s)
+{
+    this->signalOpenTransaction(d, s);
+}
+
+void Application::slotCommitTransaction(const Document& d)
+{
+    this->signalCommitTransaction(d);
+}
+
+void Application::slotAbortTransaction(const Document& d)
+{
+    this->signalAbortTransaction(d);
+}
+
+void Application::slotStartSaveDocument(const App::Document& doc, const std::string& filename)
+{
+    this->signalStartSaveDocument(doc, filename);
+}
+
+void Application::slotFinishSaveDocument(const App::Document& doc, const std::string& filename)
+{
+    this->signalFinishSaveDocument(doc, filename);
 }
 
 //**************************************************************************
@@ -1416,6 +1507,10 @@ void Application::initConfig(int argc, char ** argv)
 #   endif
 
     // init python
+#if PY_MAJOR_VERSION >= 3
+    PyImport_AppendInittab ("FreeCAD", init_freecad_module);
+    PyImport_AppendInittab ("__FreeCADBase__", init_freecad_base_module);
+#endif
     mConfig["PythonSearchPath"] = Interpreter().init(argc,argv);
 
     // Parse the options that have impact on the init process
@@ -1426,7 +1521,7 @@ void Application::initConfig(int argc, char ** argv)
     _pConsoleObserverStd = new ConsoleObserverStd();
     Console().AttachObserver(_pConsoleObserverStd);
     if (mConfig["Verbose"] == "Strict")
-        Console().SetMode(ConsoleSingleton::Verbose);
+        Console().UnsetConsoleMode(ConsoleSingleton::Verbose);
 
     // file logging Init ===========================================================
     if (mConfig["LoggingFile"] == "1") {
@@ -1539,6 +1634,12 @@ void Application::initApplication(void)
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath
        ("User parameter:BaseApp/Preferences/Units");
     UnitsApi::setSchema((UnitSystem)hGrp->GetInt("UserSchema",0));
+    UnitsApi::setDecimals(hGrp->GetInt("Decimals", Base::UnitsApi::getDecimals()));
+
+    // In case we are using fractional inches, get user setting for min unit
+    int denom = hGrp->GetInt("FracInch", Base::QuantityFormat::getDefaultDenominator());
+    Base::QuantityFormat::setDefaultDenominator(denom);
+
 
 #if defined (_DEBUG)
     Console().Log("Application is built with debug information\n");
@@ -1552,7 +1653,7 @@ void Application::initApplication(void)
         ObjectLabelObserver::instance();
     }
     catch (const Base::Exception& e) {
-        Base::Console().Error("%s\n", e.what());
+        e.ReportException();
     }
 }
 
@@ -2270,7 +2371,7 @@ void Application::ExtractUserPath()
 
 #elif defined(FC_OS_WIN32)
     WCHAR szPath[MAX_PATH];
-    TCHAR dest[MAX_PATH*3];
+    char dest[MAX_PATH*3];
     // Get the default path where we can save our documents. It seems that
     // 'CSIDL_MYDOCUMENTS' doesn't work on all machines, so we use 'CSIDL_PERSONAL'
     // which does the same.
@@ -2374,8 +2475,8 @@ std::string Application::FindHomePath(const char* sCall)
             absPath = path;
     }
     else {
-        // Find the path of the executable. Theoretically, there could  occur a
-        // race condition when using readlink, but we only use  this method to
+        // Find the path of the executable. Theoretically, there could occur a
+        // race condition when using readlink, but we only use this method to
         // get the absolute path of the executable to compute the actual home
         // path. In the worst case we simply get q wrong path and FreeCAD is not
         // able to load its modules.
@@ -2449,12 +2550,17 @@ std::string Application::FindHomePath(const char* call)
 #elif defined (FC_OS_WIN32)
 std::string Application::FindHomePath(const char* sCall)
 {
-    // We have three ways to start this application either use one of the two executables or
-    // import the FreeCAD.pyd module from a running Python session. In the latter case the
-    // Python interpreter is already initialized.
+    // We have several ways to start this application:
+    // * use one of the two executables
+    // * import the FreeCAD.pyd module from a running Python session. In this case the
+    //   Python interpreter is already initialized.
+    // * use a custom dll that links FreeCAD core dlls and that is loaded by its host application
+    //   In this case the calling name should be set to FreeCADBase.dll or FreeCADApp.dll in order
+    //   to locate the correct home directory
     wchar_t szFileName [MAX_PATH];
-    if (Py_IsInitialized()) {
-        GetModuleFileNameW(GetModuleHandle(sCall),szFileName, MAX_PATH-1);
+    QString dll(QString::fromUtf8(sCall));
+    if (Py_IsInitialized() || dll.endsWith(QLatin1String(".dll"))) {
+        GetModuleFileNameW(GetModuleHandleA(sCall),szFileName, MAX_PATH-1);
     }
     else {
         GetModuleFileNameW(0, szFileName, MAX_PATH-1);
