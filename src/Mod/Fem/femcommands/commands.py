@@ -824,6 +824,21 @@ class _CommandFemSolverZ88(CommandManager):
         FreeCADGui.doCommand("FemGui.getActiveAnalysis().addObject(ObjectsFem.makeSolverZ88(FreeCAD.ActiveDocument))")
         FreeCAD.ActiveDocument.recompute()
 
+class _CommandFemSolverOOFEM(CommandManager):
+    "The FEM_SolverOOFEM command definition"
+    def __init__(self):
+        super(_CommandFemSolverOOFEM, self).__init__()
+        self.resources = {'Pixmap': 'fem-solver-standard',
+                          'MenuText': QtCore.QT_TRANSLATE_NOOP("FEM_SolverOOFEM", "Solver OOFEM"),
+                          'Accel': "S, Z",
+                          'ToolTip': QtCore.QT_TRANSLATE_NOOP("FEM_SolverOOFEM", "Creates a FEM solver OOFEM")}
+        self.is_active = 'with_analysis'
+
+    def Activated(self):
+        FreeCAD.ActiveDocument.openTransaction("Create SolverOOFEM")
+        FreeCADGui.addModule("ObjectsFem")
+        FreeCADGui.doCommand("FemGui.getActiveAnalysis().addObject(ObjectsFem.makeSolverOOFEM(FreeCAD.ActiveDocument))")
+        FreeCAD.ActiveDocument.recompute()
 
 # the string in add command will be the page name on FreeCAD wiki
 FreeCADGui.addCommand('FEM_Analysis', _CommandFemAnalysis())

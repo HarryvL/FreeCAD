@@ -68,15 +68,15 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
         if not self.femelement_table:
             self.femelement_table = FemMeshTools.get_femelement_table(self.femmesh)
             self.element_count = len(self.femelement_table)
-        self.set_OOFEM_elparam()
+#        self.set_OOFEM_elparam()
         self.write_OOFEM_mesh()
-        self.write_OOFEM_contraints()
-        self.write_OOFEM_face_loads()
-        self.write_OOFEM_materials()
-        self.write_OOFEM_elements_properties()
-        self.write_OOFEM_integration_properties()
-        self.write_OOFEM_memory_parameter()
-        self.write_OOFEM_solver_parameter()
+#        self.write_OOFEM_contraints()
+#        self.write_OOFEM_face_loads()
+#        self.write_OOFEM_materials()
+#        self.write_OOFEM_elements_properties()
+#        self.write_OOFEM_integration_properties()
+#        self.write_OOFEM_memory_parameter()
+#        self.write_OOFEM_solver_parameter()
         FreeCAD.Console.PrintMessage("Writing time input file: " + str(time.clock() - timestart) + ' \n\n')
         return self.dir_name
 
@@ -97,10 +97,11 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
         FreeCAD.Console.PrintMessage(self.z88_elparam)
         FreeCAD.Console.PrintMessage('\n')
 
-    def write_z88_mesh(self):
-        mesh_file_path = self.file_name + 'i1.txt'
+    def write_OOFEM_mesh(self):
+        mesh_file_path = self.file_name + 'testOOFEM.in'
         f = open(mesh_file_path, 'w')
-        importZ88Mesh.write_z88_mesh_to_file(self.femnodes_mesh, self.femelement_table, self.z88_element_type, f)
+#        importZ88Mesh.write_z88_mesh_to_file(self.femnodes_mesh, self.femelement_table, self.z88_element_type, f)
+        f.write("test" + '\n')
         f.close()
 
     def write_z88_contraints(self):
