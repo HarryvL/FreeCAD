@@ -426,8 +426,8 @@ def makeSolverZ88(doc, name="SolverZ88"):
 
 def makeSolverOOFEM(doc, name="SolverOOFEM"):
     '''makeSolverOOFEM(document, [name]): makes a OOFEM solver object'''
-    import femsolver.OOFEM.solver
-    obj = femsolver.OOFEM.solver.create(doc, name)
+    import femsolver.oofem.solver
+    obj = femsolver.oofem.solver.create(doc, name)
     return obj
 
 '''

@@ -43,6 +43,8 @@ SET(FemInOut_SRCS
     feminout/importVTKResults.py
     feminout/importZ88Mesh.py
     feminout/importZ88O2Results.py
+    feminout/importOOFEMMesh.py
+    feminout/importOOFEMResults.py
     feminout/readFenicsXDMF.py
     feminout/readFenicsXML.py
     feminout/writeFenicsXDMF.py
