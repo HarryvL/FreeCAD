@@ -321,6 +321,7 @@ def read_OOFEM_mesh(OOFEM_mesh_input):
 
 # write OOFEM Mesh
 def write_OOFEM_mesh_to_file(femnodes_mesh, femelement_table, OOFEM_element_type, f):
+    f.write("ENTER write_OOFEM_mesh_to_file\n")
     node_dimension = 3  # 2 for 2D not supported
     if (OOFEM_element_type == 4 or
        OOFEM_element_type == 17 or OOFEM_element_type == 16 or
@@ -334,6 +335,9 @@ def write_OOFEM_mesh_to_file(femnodes_mesh, femelement_table, OOFEM_element_type
     node_count = len(femnodes_mesh)
     element_count = len(femelement_table)
     dofs = node_dof * node_count
+    f.write("node_count {0}\n".format(node_count))
+    f.write("element_count {0}\n".format(element_count))
+    f.write("dofs {0}\n".format(dofs))
     unknown_flag = 0
     written_by = "written by FreeCAD"
 
