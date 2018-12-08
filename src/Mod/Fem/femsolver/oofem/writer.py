@@ -72,7 +72,13 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
     def write_OOFEM_input_file(self):
         
         timestart = time.clock()
-        
+
+        if not self.femnodes_mesh:
+            self.femnodes_mesh = self.femmesh.Nodes
+        if not self.femelement_table:
+            self.femelement_table = FemMeshTools.get_femelement_table(self.femmesh)
+            self.element_count = len(self.femelement_table)
+
         inpfile = open(self.file_name, 'a')        
         
         self.write_output_file_record(inpfile)
@@ -156,13 +162,14 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
             [ic # (ia) ]
             [doftype # (ia) masterMask # (ia) ]
             [shared]i | h[remote]i | h[null]
-            [partitions # (ia) ]
-                                                 *Node coords # (ra)
-                                                  [lcs # (ra) ]'''
-                                                  
-        self.write_element_record(inpfile)
-           
-        '''*ElementType
+            [partitions # (ia) ]'''
+
+        self.write_node_and_element_records(inpfile)
+
+        '''
+            *Node coords # (ra)
+            [lcs # (ra) ]
+            *ElementType
             (num#) (in)
             mat # (in) crossSect # (in) nodes # (ia)
             [bodyLoads # (ia) ] [boundaryLoads # (ia) ]
@@ -241,8 +248,17 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
                                         *Concrete3 d (rn) # E (rn) # n (rn) # Gf (rn) # Ft (rn) # exp soft (in) # tAlpha (rn) #
                                          EC2CreepMat model for concrete creep and shrinkage
                                         *EC2CreepMat n (rn) # [ begOfTimeOfInterest (rn) #] [ end-OfTimeOfInterest (rn) #] relMatAge (rn) # [ timeFactor (rn) #] stiffnessFactor (rn) # [ tAlpha (rn) #] fcm28 (rn) # t0 (rn) # cem- Type (in) # [ henv (rn) #] h0 (rn) # shType (in) # [ spectrum ][ temperatureDependent ]'''
-           
-                   
+
+        self.write_boundary_condition_record(inpfile)
+
+        self.write_nodal_load_record(inpfile)
+
+        self.write_load_function_record(inpfile)
+
+        self.write_element_set_record(inpfile)
+
+        self.write_node_set_record(inpfile)
+
         # footer
         self.write_footer(inpfile)
         inpfile.close()
@@ -265,24 +281,27 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
         f.write('#\n')
         f.write('# Domain Record\n')
         f.write('#\n')
+        f.write('domain 3D\n')
 
     def write_output_manager_record(self, f):
         f.write('#\n')
         f.write('# Output Manager Record\n')
         f.write('#\n')
+        f.write('OutputManager tstep_all dofman_all element_all\n')
 
     def write_dof_manager_record(self, f):
         f.write('#\n')
         f.write('# DOF Manager Record\n')
         f.write('#\n')
+        f.write('ndofman {0} nelem {1} ncrossect {2} nmat {3} nbc {4} nic {5} nltf {6} neset {7}\n'.format(444, 799, 1, 2, 1, 0, 1, 1))
 
-    def write_element_record(self, f):
-        self.OOFEM_element_type=16
+    def write_node_and_element_records(self, f):
+        self.OOFEM_element_type = 16
         f.write('#\n')
-        f.write('# Element Record\n')
+        f.write('# Node and Element Records\n')
         f.write('#\n')
-        f.write("self.femnodes_mesh {0}\n".format(self.femnodes_mesh))
-        f.write("self.femelement_table {0}\n".format(self.femelement_table))
+        #f.write("self.femnodes_mesh {0}\n".format(self.femnodes_mesh))
+        #f.write("self.femelement_table {0}\n".format(self.femelement_table))
         importOOFEMMesh.write_OOFEM_mesh_to_file(self.femnodes_mesh, self.femelement_table, self.OOFEM_element_type, f)
         
     def write_set_record(self, f):
@@ -294,19 +313,48 @@ class FemInputWriterOOFEM(FemInputWriter.FemInputWriter):
         f.write('#\n')
         f.write('# Cross Section Record\n')
         f.write('#\n')
+        f.write('SimpleCS 1 material 1 set 1\n')
 
     def write_material_type_record(self, f):
         f.write('#\n')
         f.write('# Material Type Record\n')
         f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
 
+    def write_boundary_condition_record(self, f):
+        f.write('#\n')
+        f.write('# Boundary Condition Record\n')
+        f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
+
+    def write_nodal_load_record(self, f):
+        f.write('#\n')
+        f.write('# Nodal Load Record\n')
+        f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
+
+    def write_load_function_record(self, f):
+        f.write('#\n')
+        f.write('# Load Function Record\n')
+        f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
+
+    def write_element_set_record(self, f):
+        f.write('#\n')
+        f.write('# Element Set Record\n')
+        f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
+
+    def write_node_set_record(self, f):
+        f.write('#\n')
+        f.write('# Node Set Record\n')
+        f.write('#\n')
+        f.write('IsoLE 1 d 2500.0 E 20.e3 n 0.2 tAlpha 0.000012\n')
 
     def write_footer(self, f):
         f.write('#\n')
         f.write('# End of Input File\n')
         f.write('#\n')
-
-
 
     def write_element_sets_material_and_femelement_type(self, f):
         f.write('\n***********************************************************\n')

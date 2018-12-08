@@ -321,7 +321,6 @@ def read_OOFEM_mesh(OOFEM_mesh_input):
 
 # write OOFEM Mesh
 def write_OOFEM_mesh_to_file(femnodes_mesh, femelement_table, OOFEM_element_type, f):
-    f.write("ENTER write_OOFEM_mesh_to_file\n")
     node_dimension = 3  # 2 for 2D not supported
     if (OOFEM_element_type == 4 or
        OOFEM_element_type == 17 or OOFEM_element_type == 16 or
@@ -335,21 +334,28 @@ def write_OOFEM_mesh_to_file(femnodes_mesh, femelement_table, OOFEM_element_type
     node_count = len(femnodes_mesh)
     element_count = len(femelement_table)
     dofs = node_dof * node_count
-    f.write("node_count {0}\n".format(node_count))
-    f.write("element_count {0}\n".format(element_count))
-    f.write("dofs {0}\n".format(dofs))
+    f.write("# node_count {0}\n".format(node_count))
+    f.write("# element_count {0}\n".format(element_count))
+    f.write("# dofs {0}\n".format(dofs))
+    f.write('#\n')
     unknown_flag = 0
-    written_by = "written by FreeCAD"
+    written_by = "written by FreeCAD\n"
 
-    # first line, some OOFEM specific stuff
-    f.write("{0} {1} {2} {3} {4} {5}\n".format(node_dimension, node_count, element_count, dofs, unknown_flag, written_by))
     # nodes
+    f.write('# Node Records\n')
+    f.write('#\n')
     for node in femnodes_mesh:
         vec = femnodes_mesh[node]
-        f.write("{0} {1} {2:.6f} {3:.6f} {4:.6f}\n".format(node, node_dof, vec.x, vec.y, vec.z, node))
+        f.write("node {0} coords {1} {2:.6f} {3:.6f} {4:.6f}\n".format(node, node_dof, vec.x, vec.y, vec.z))
+
     # elements
+    f.write('#\n')
+    f.write('# Element Records\n')
+    f.write('#\n')
+    count=0
     for element in femelement_table:
         # OOFEM_element_type is checked for every element, but mixed elements are not supported up to date
+        count+=1
         n = femelement_table[element]
         if OOFEM_element_type == 2 or OOFEM_element_type == 4 or OOFEM_element_type == 5 or OOFEM_element_type == 9 or OOFEM_element_type == 13 or OOFEM_element_type == 25:
             # seg2 FreeCAD --> stab4 OOFEM
@@ -376,11 +382,10 @@ def write_OOFEM_mesh_to_file(femnodes_mesh, femelement_table, OOFEM_element_type
             f.write("{0} {1} {2} {3}\n".format(
                     n[3], n[1], n[2], n[0]))
         elif OOFEM_element_type == 16:
-            # tetra10 FreeCAD --> volume16 OOFEM
+            # tetra10 FreeCAD --> QTRSpace OOFEM
             # N1, N2, N4, N3, N5, N9, N8, N6, N10, N7, FC to OOFEM is different as OOFEM to FC
-            f.write("{0} {1}\n".format(element, OOFEM_element_type, element))
-            f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}\n".format(
-                    n[0], n[1], n[3], n[2], n[4], n[8], n[7], n[5], n[9], n[6]))
+            f.write("QTRSpace {0} nodes 10 {1} {2} {3} {4} {5} {6} {7} {8} {9} {10}\n".format(
+                   count, n[0], n[1], n[3], n[2], n[4], n[8], n[7], n[5], n[9], n[6]))
         elif OOFEM_element_type == 1:
             # hexa8 FreeCAD --> volume1 OOFEM
             # N1, N2, N3, N4, N5, N6, N7, N8
