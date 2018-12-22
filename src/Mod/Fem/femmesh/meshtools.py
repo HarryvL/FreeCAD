@@ -386,8 +386,11 @@ def get_femelement_sets(femmesh, femelement_table, fem_objects, femnodes_ele_tab
             if obj.Name == has_remaining_femelements:
                 fem_object['FEMElements'] = sorted(remaining_femelements)
     # check if all worked out well
-    if not femelements_count_ok(len(femelement_table), count_femelements):
+    if femelements_count_ok(len(femelement_table), count_femelements):
+        return True
+    else:
         FreeCAD.Console.PrintError('Error in get_femelement_sets -- > femelements_count_ok() failed!\n')
+        return False
 
 
 def get_femelement_direction1D_set(femmesh, femelement_table, beamrotation_objects, theshape=None):
@@ -545,7 +548,7 @@ def get_femelement_sets_from_group_data(femmesh, fem_objects):
         return False
     else:
         return True
-    print("")
+    # print("")
 
 
 def get_elset_short_name(obj, i):
@@ -1152,7 +1155,7 @@ def get_ref_facenodes_areas(femnodes_mesh, face_table):
 
 def get_ref_shape_node_sum_geom_table(node_geom_table):
     # shape could be Edge or Face, geom could be length or area
-    # sum of legth or area for each node of the ref_shape
+    # sum of length or area for each node of the ref_shape
     node_sum_geom_table = {}
     for n, A in node_geom_table:
         # print(n, ' --> ', A)
@@ -1338,7 +1341,11 @@ def find_element_in_shape(aShape, anElement):
                 return ele
         FreeCAD.Console.PrintError('Solid ' + str(anElement) + ' not found in: ' + str(aShape) + '\n')
         if ele_st == 'Solid' and aShape.ShapeType == 'Solid':
-            print('We have been searching for a Solid in a Solid and we have not found it. In most cases this should be searching for a Solid inside a CompSolid. Check the ShapeType of your Part to mesh.')
+            messagePart = (
+                'We have been searching for a Solid in a Solid and we have not found it. '
+                'In most cases this should be searching for a Solid inside a CompSolid. Check the ShapeType of your Part to mesh.'
+            )
+            print(messagePart)
         # Part.show(anElement)
         # Part.show(aShape)
     elif ele_st == 'Face' or ele_st == 'Shell':

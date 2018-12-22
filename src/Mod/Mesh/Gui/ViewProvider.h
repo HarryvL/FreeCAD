@@ -136,6 +136,8 @@ public:
     bool exportToVrml(const char* filename, const MeshCore::Material&, bool binary=false) const;
     void exportMesh(const char* filename, const char* fmt=0) const;
     void setupContextMenu(QMenu*, QObject*, const char*);
+    /// Get the python wrapper for that ViewProvider
+    PyObject* getPyObject();
 
     /** @name Editing */
     //@{
@@ -181,8 +183,8 @@ protected:
     virtual void faceInfo(unsigned long facet);
     virtual void fillHole(unsigned long facet);
     virtual void selectArea(short, short, short, short, const SbViewportRegion&, SoCamera*);
-    void highlightSelection();
-    void unhighlightSelection();
+    virtual void highlightSelection();
+    virtual void unhighlightSelection();
     void highlightComponents();
     void setHighlightedComponents(bool);
     App::PropertyColorList* getColorProperty() const;
