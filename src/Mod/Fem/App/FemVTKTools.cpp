@@ -662,7 +662,10 @@ std::map<std::string, std::vector<std::string>> _getFreeCADMechResultProperties(
     resFCProperties["vectors"] = {
     "DisplacementVectors",
     "StressVectors",
-    "StrainVectors"
+    "StrainVectors",
+    "PS1Vector",
+    "PS2Vector",
+    "PS3Vector"
     };
     // App::PropertyFloatList will be a list of scalars in vtk
     resFCProperties["scalars"] = {
@@ -676,7 +679,11 @@ std::map<std::string, std::vector<std::string>> _getFreeCADMechResultProperties(
     "MassFlowRate",
     "NetworkPressure",
     "UserDefined",
-    "Temperature"
+    "Temperature",
+    "MohrCoulomb",
+    "ReinforcementRatio_x",
+    "ReinforcementRatio_y",
+    "ReinforcementRatio_z"
     };
 
     return resFCProperties;
