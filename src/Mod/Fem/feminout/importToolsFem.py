@@ -276,6 +276,7 @@ def fill_femresult_mechanical(results, result_set, span):
 #
 #               HarryvL: determine concrete / non-concrete nodes
 #                
+                result_mesh = FreeCAD.ActiveDocument.Result_mesh.FemMesh
                 for obj in FreeCAD.ActiveDocument.Objects:
                     if obj.isDerivedFrom('App::MaterialObjectPython'):
                         if obj.Material.get('Name') == "Concrete":
