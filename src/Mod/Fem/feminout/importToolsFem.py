@@ -303,7 +303,7 @@ def fill_femresult_mechanical(results, result_set, span):
 
                 for isv in range(nsr):
 
-                    i=stress.values()[isv]
+                    i=list(stress.values())[isv]
 
                     rhox=0.
                     rhoy=0.
