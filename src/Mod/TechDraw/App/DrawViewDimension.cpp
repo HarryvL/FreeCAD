@@ -96,8 +96,7 @@ DrawViewDimension::DrawViewDimension(void)
     References2D.setScope(App::LinkScope::Global);
     ADD_PROPERTY_TYPE(References3D,(0,0),"",(App::PropertyType)(App::Prop_None),"3D Geometry References");
     References3D.setScope(App::LinkScope::Global);
-    ADD_PROPERTY_TYPE(FormatSpec,(getDefaultFormatSpec().c_str()) ,
-                  "Format",(App::PropertyType)(App::Prop_None),"Dimension Format");
+    ADD_PROPERTY_TYPE(FormatSpec,("") , "Format",(App::PropertyType)(App::Prop_None),"Dimension Format");
     ADD_PROPERTY_TYPE(Arbitrary,(false) ,"Format",(App::PropertyType)(App::Prop_None),"Value overridden by user");
 
     Type.setEnums(TypeEnums);                                          //dimension type: length, radius etc
@@ -106,7 +105,6 @@ DrawViewDimension::DrawViewDimension(void)
     ADD_PROPERTY(MeasureType, ((long)1));                             //Projected (or True) measurement
     ADD_PROPERTY_TYPE(OverTolerance ,(0.0),"",App::Prop_None,"+ Tolerance value");
     ADD_PROPERTY_TYPE(UnderTolerance ,(0.0),"",App::Prop_None,"- Tolerance value");
-
 
     //hide the properties the user can't edit in the property editor
     References2D.setStatus(App::Property::Hidden,true);
@@ -168,16 +166,9 @@ void DrawViewDimension::onChanged(const App::Property* prop)
                 }
             }
         }
-        if (prop == &Arbitrary) {
-            if (!Arbitrary.getValue()) {
-                FormatSpec.setValue(getDefaultFormatSpec().c_str());             //restore a usable FormatSpec
-            }
+        if (prop == &Type) {
+            FormatSpec.setValue(getDefaultFormatSpec().c_str());
         }
-
-    }
-
-    if (prop == &Type) {
-        FormatSpec.setValue(getDefaultFormatSpec().c_str());             //restore a FormatSpec for this type(dim,rad,etc)
     }
 
     DrawView::onChanged(prop);
@@ -364,7 +355,6 @@ App::DocumentObjectExecReturn *DrawViewDimension::execute(void)
         m_arcPoints = pts;
         m_hasGeometry = true;
     } else if(Type.isValue("Angle")){
-        //TODO: do we need to distinguish inner vs outer angle? -wf
         if (getRefType() != twoEdge) {
              Base::Console().Log("Error: DVD - %s - 2D references are corrupt\n",getNameInDocument());
              return App::DocumentObject::StdReturn;
@@ -452,9 +442,12 @@ std::string  DrawViewDimension::getFormatedValue(bool obtuse)
     QString specStr = QString::fromUtf8(FormatSpec.getStrValue().data(),FormatSpec.getStrValue().size());
     double val = std::abs(getDimValue());    //internal units!
     
+    bool angularMeasure = false;
     Base::Quantity qVal;
     qVal.setValue(val);
-    if (Type.isValue("Angle")) {
+    if ( (Type.isValue("Angle")) ||
+         (Type.isValue("Angle3Pt")) ) {
+        angularMeasure = true;
         qVal.setUnit(Base::Unit::Angle);
         if (obtuse) {
             qVal.setValue(fabs(360.0 - val));
@@ -463,58 +456,82 @@ std::string  DrawViewDimension::getFormatedValue(bool obtuse)
         qVal.setUnit(Base::Unit::Length);
     }
 
-    QString userStr = qVal.getUserString();                           //this handles mm to inch/km/parsec etc and decimal positions
-                                                                      //but won't give more than Global_Decimals precision
-                                                                      //really should be able to ask units for value in appropriate UoM!!
-    QRegExp rxUnits(QString::fromUtf8(" \\D*$"));                     //space + any non digits at end of string
+    QString userStr = qVal.getUserString();                           // this handles mm to inch/km/parsec etc
+                                                                      // and decimal positions but won't give more than
+                                                                      // Global_Decimals precision
+                                                                      // really should be able to ask units for value
+                                                                      // in appropriate UoM!!
 
-    QString userVal = userStr;
-    userVal.remove(rxUnits);                                           //getUserString(defaultDecimals) without units
+    //units api: get schema to figure out if this is multi-value schema(Imperial1, ImperialBuilding, etc)
+    //if it is multi-unit schema, don't even try to use Alt Decimals or format per format spec
+    Base::UnitSystem uniSys = Base::UnitsApi::getSchema();
 
-    QLocale loc;
-    double userValNum = loc.toDouble(userVal);
-
-    QString userUnits;
-    int pos = 0;
-    if ((pos = rxUnits.indexIn(userStr, 0)) != -1)  {
-        userUnits = rxUnits.cap(0);                                       //entire capture - non numerics at end of userString
-    }
-
-    //find the %x.y tag in FormatSpec
-    QRegExp rxFormat(QString::fromUtf8("%[0-9]*\\.*[0-9]*[aefgAEFG]"));     //printf double format spec 
-    QString match;
-    QString specVal = userVal;                                             //sensible default
-    pos = 0;
-    if ((pos = rxFormat.indexIn(specStr, 0)) != -1)  {
-        match = rxFormat.cap(0);                                          //entire capture of rx
-#if QT_VERSION >= 0x050000
-        specVal = QString::asprintf(Base::Tools::toStdString(match).c_str(),userValNum);
-#else
-        QString qs2;
-        specVal = qs2.sprintf(Base::Tools::toStdString(match).c_str(),userValNum);
-#endif
-    }
-
-    QString repl = userVal;
-    if (useDecimals()) {
-        if (showUnits()) {
-            repl = userStr;
-        } else {
-            repl = userVal;
-        }
+//handle multi value schemes
+    if (((uniSys == Base::UnitSystem::Imperial1) ||
+         (uniSys == Base::UnitSystem::ImperialBuilding) ) &&
+         !angularMeasure) {
+        specStr = userStr;
+    } else if ((uniSys == Base::UnitSystem::ImperialCivil) &&
+         angularMeasure) {
+        QString dispMinute = QString::fromUtf8("\'");
+        QString dispSecond = QString::fromUtf8("\"");
+        QString schemeMinute = QString::fromUtf8("M");
+        QString schemeSecond = QString::fromUtf8("S");
+        specStr = userStr.replace(schemeMinute,dispMinute);
+        specStr = specStr.replace(schemeSecond,dispSecond);
     } else {
-        if (showUnits()) {
-            repl = specVal + userUnits;
-        } else {
-            repl = specVal;
-        }
-    }
+//handle single value schemes
+        QRegExp rxUnits(QString::fromUtf8(" \\D*$"));                     //space + any non digits at end of string
 
-    specStr.replace(match,repl);
-    //this next bit is so inelegant!!!
-    QChar dp = QChar::fromLatin1('.');
-    if (loc.decimalPoint() != dp) {
-        specStr.replace(dp,loc.decimalPoint());
+        QString userVal = userStr;
+        userVal.remove(rxUnits);                                          //getUserString(defaultDecimals) without units
+
+        QLocale loc;
+        double userValNum = loc.toDouble(userVal);
+
+        QString userUnits;
+        int pos = 0;
+        if ((pos = rxUnits.indexIn(userStr, 0)) != -1)  {
+            userUnits = rxUnits.cap(0);                                       //entire capture - non numerics at end of userString
+        }
+
+        //find the %x.y tag in FormatSpec
+        QRegExp rxFormat(QString::fromUtf8("%[0-9]*\\.*[0-9]*[aefgAEFG]"));     //printf double format spec 
+        QString match;
+        QString specVal = userVal;                                             //sensible default
+        pos = 0;
+        if ((pos = rxFormat.indexIn(specStr, 0)) != -1)  {
+            match = rxFormat.cap(0);                                          //entire capture of rx
+
+    #if QT_VERSION >= 0x050000
+            specVal = QString::asprintf(Base::Tools::toStdString(match).c_str(),userValNum);
+    #else
+            QString qs2;
+            specVal = qs2.sprintf(Base::Tools::toStdString(match).c_str(),userValNum);
+    #endif
+        }
+
+        QString repl = userVal;
+        if (useDecimals()) {
+            if (showUnits()) {
+                repl = userStr;
+            } else {
+                repl = userVal;
+            }
+        } else {
+            if (showUnits()) {
+                repl = specVal + userUnits;
+            } else {
+                repl = specVal;
+            }
+        }
+
+        specStr.replace(match,repl);
+        //this next bit is so inelegant!!!
+        QChar dp = QChar::fromLatin1('.');
+        if (loc.decimalPoint() != dp) {
+            specStr.replace(dp,loc.decimalPoint());
+        }
     }
 
     return specStr.toUtf8().constData();
@@ -550,7 +567,7 @@ double DrawViewDimension::getDimValue()
         } else if(Type.isValue("Angle")){
             result = measurement->angle();
         } else {  //tarfu
-            throw Base::Exception("getDimValue() - Unknown Dimension Type (3)");
+            throw Base::ValueError("getDimValue() - Unknown Dimension Type (3)");
         }
     } else {
         // Projected Values
@@ -782,7 +799,7 @@ pointPair DrawViewDimension::closestPoints(TopoDS_Shape s1,
     pointPair result;
     BRepExtrema_DistShapeShape extss(s1, s2);
     if (!extss.IsDone()) {
-        throw Base::Exception("DVD::closestPoints - BRepExtrema_DistShapeShape failed");
+        throw Base::RuntimeError("DVD::closestPoints - BRepExtrema_DistShapeShape failed");
     }
     int count = extss.NbSolution();
     if (count != 0) {
@@ -849,7 +866,7 @@ double DrawViewDimension::dist2Segs(Base::Vector2d s1,
 
     BRepExtrema_DistShapeShape extss(edge1, edge2);
     if (!extss.IsDone()) {
-        throw Base::Exception("DVD::dist2Segs - BRepExtrema_DistShapeShape failed");
+        throw Base::RuntimeError("DVD::dist2Segs - BRepExtrema_DistShapeShape failed");
     }
     int count = extss.NbSolution();
     double minDist = 0.0;

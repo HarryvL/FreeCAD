@@ -111,8 +111,8 @@ void CmdRaytracingWriteCamera::activated(int)
         SoDB::read(&in,rootNode);
 
         if (!rootNode || !rootNode->getTypeId().isDerivedFrom(SoCamera::getClassTypeId()))
-            throw Base::Exception("CmdRaytracingWriteCamera::activated(): Could not read "
-                                  "camera information from ASCII stream....\n");
+            throw Base::FileException("CmdRaytracingWriteCamera::activated(): Could not read "
+                                      "camera information from ASCII stream....\n");
 
         // root-node returned from SoDB::readAll() has initial zero
         // ref-count, so reference it before we start using it to
@@ -260,7 +260,11 @@ void CmdRaytracingWriteView::activated(int)
 
     openCommand("Write view");
     doCommand(Doc,"import Raytracing,RaytracingGui");
+#if PY_MAJOR_VERSION < 3
     doCommand(Doc,"OutFile = open(unicode(\"%s\",\"utf-8\"),\"w\")",cFullName.c_str());
+#else
+    doCommand(Doc,"OutFile = open(\"%s\",\"w\")",cFullName.c_str());
+#endif
     try {
         doCommand(Doc,"result = open(App.getResourceDir()+'Mod/Raytracing/Templates/ProjectStd.pov').read()");
         doCommand(Doc,"content = ''");
@@ -392,7 +396,7 @@ Gui::Action * CmdRaytracingNewPovrayProject::createAction(void)
     addTemplates(path);
 
     path = App::Application::getUserAppDataDir();
-    path += "Mod/Raytracing/Templates/";
+    path += "data/Mod/Raytracing/Templates/";
     addTemplates(path);
 
     path = App::Application::getUserAppDataDir();
@@ -550,7 +554,11 @@ void CmdRaytracingExportProject::activated(int)
 
         doCommand(Doc,"PageFile = open(App.activeDocument().%s.PageResult,'r')",Sel[0].FeatName);
         std::string fname = (const char*)fn.toUtf8();
+#if PY_MAJOR_VERSION < 3
         doCommand(Doc,"OutFile = open(unicode('%s','utf-8'),'w')",fname.c_str());
+#else
+        doCommand(Doc,"OutFile = open('%s','w')",fname.c_str());
+#endif
         doCommand(Doc,"OutFile.write(PageFile.read())");
         doCommand(Doc,"del OutFile,PageFile");
 

@@ -148,6 +148,20 @@ public:
     virtual void RestoreDocFile(Reader &/*reader*/);
     /// Encodes an attribute upon saving.
     static std::string encodeAttribute(const std::string&);
+
+    //dump the binary persistence data into into the stream
+    void dumpToStream(std::ostream& stream, int compression);
+
+    //restore the binary persistence data from a stream. Must have the format used by dumpToStream
+    void restoreFromStream(std::istream& stream);
+
+private:
+    /** This method is used at the end of restoreFromStream()
+     * after all data files have been read in.
+     * A subclass can set up some internals. The default
+     * implementation does nothing.
+     */
+    virtual void restoreFinished() {}
 };
 
 } //namespace Base

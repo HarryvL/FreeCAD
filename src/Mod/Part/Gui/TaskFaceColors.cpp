@@ -45,7 +45,7 @@
 # include <Inventor/nodes/SoSeparator.h>
 #endif
 
-#include <boost/signals.hpp>
+#include <boost/signals2.hpp>
 #include <boost/bind.hpp>
 
 #include "ui_TaskFaceColors.h"
@@ -94,7 +94,7 @@ namespace PartGui {
 class FaceColors::Private
 {
 public:
-    typedef boost::signals::connection Connection;
+    typedef boost::signals2::connection Connection;
     Ui_TaskFaceColors* ui;
     Gui::View3DInventorViewer* view;
     ViewProviderPartExt* vp;
@@ -332,9 +332,10 @@ void FaceColors::on_defaultButton_clicked()
 void FaceColors::on_colorButton_changed()
 {
     if (!d->index.isEmpty()) {
+        float alpha = static_cast<float>(d->vp->Transparency.getValue())/100;
         QColor c = d->ui->colorButton->color();
         for (QSet<int>::iterator it = d->index.begin(); it != d->index.end(); ++it) {
-            d->perface[*it].set(c.redF(), c.greenF(), c.blueF());
+            d->perface[*it].set(c.redF(), c.greenF(), c.blueF(), alpha);
         }
         d->vp->DiffuseColor.setValues(d->perface);
     }

@@ -144,6 +144,7 @@ void QGIDatumLabel::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
 {
     QGIView *view = dynamic_cast<QGIView *> (parentItem());
     assert(view != 0);
+    Q_UNUSED(view);
 
     Q_EMIT hover(false);
     if (!isSelected()) {
@@ -225,8 +226,7 @@ void QGIDatumLabel::setTolString()
 
     QString html = QString::fromUtf8("<div>%1 <br/>%2 </div>");
     html = html.arg(overFormat).arg(underFormat);
-    m_tolText->setHtml(html);                           //<<< sometimes seg fault here in FT_Outline_Decompose ()
-                                                      //<<< only angle measures with degree symbol shown??
+    m_tolText->setHtml(html);
 
     return;
 } 
@@ -277,7 +277,8 @@ void QGIDatumLabel::setPrettyNormal(void)
 //**************************************************************
 QGIViewDimension::QGIViewDimension() :
     hasHover(false),
-    m_lineWidth(0.0)
+    m_lineWidth(0.0),
+    m_obtuse(false)
 {
     setHandlesChildEvents(false);
     setFlag(QGraphicsItem::ItemIsMovable, false);
@@ -369,7 +370,6 @@ void QGIViewDimension::updateView(bool update)
         return;
     }
 
-    // Identify what changed to prevent complete redraw
     if (update||
         dim->X.isTouched() ||
         dim->Y.isTouched()) {
@@ -397,6 +397,7 @@ void QGIViewDimension::updateView(bool update)
 
 void QGIViewDimension::updateDim(bool obtuse)
 {
+    (void) obtuse;
     const auto dim( dynamic_cast<TechDraw::DrawViewDimension *>(getViewObject()) );
     if( dim == nullptr ) {
         return;
@@ -406,7 +407,7 @@ void QGIViewDimension::updateDim(bool obtuse)
         return;
     }
  
-    QString labelText = QString::fromUtf8(dim->getFormatedValue(obtuse).c_str());
+    QString labelText = QString::fromUtf8(dim->getFormatedValue(m_obtuse).c_str());
     
     QFont font = datumLabel->getFont();
     font.setPointSizeF(Rez::guiX(vp->Fontsize.getValue()));
@@ -484,7 +485,6 @@ void QGIViewDimension::draw()
     m_lineWidth = Rez::guiX(vp->LineWidth.getValue());
     float margin = Rez::guiX(5.f);
 
-//    QString labelText = datumLabel->toPlainText();
     QString labelText = getLabelText();
     Base::Vector3d lblCenter(datumLabel->X(), datumLabel->Y(), 0);    //already Qt gui coords
 
@@ -497,6 +497,14 @@ void QGIViewDimension::draw()
         Base::Vector3d startDist, endDist, midDist;                     //start/end/mid points of distance line
         startDist = Rez::guiX(pts.first);
         endDist   = Rez::guiX(pts.second);
+        if (strcmp(dimType, "DistanceY") == 0 ) {
+            if (startDist.y < endDist.y) {                              //measure bottom to top
+                Base::Vector3d temp = startDist;
+                startDist = endDist;
+                endDist = temp;
+            }
+        }
+
         Base::Vector3d vecDist = (endDist - startDist);
 
         // +/- aligned method
@@ -522,8 +530,8 @@ void QGIViewDimension::draw()
             normDim = Base::Vector3d (-dirDim.y,dirDim.x, 0);
         } else if (strcmp(dimType, "DistanceY") == 0 ) {
             //distance and dimension lines not (necessarily) parallel
-            dirDim = Base::Vector3d (0, ((endDist.y - startDist.y >= FLT_EPSILON) ? 1 : -1) , 0);
-            normDim = Base::Vector3d (-dirDim.y, dirDim.x, 0);
+            dirDim = Base::Vector3d (0, 1, 0); 
+            normDim = Base::Vector3d (-1, 0, 0);
         }
 
         //for ortho drawing extension lines are para to normDim, perp to dirDist
@@ -647,6 +655,10 @@ void QGIViewDimension::draw()
         Base::Vector3d  dim2Tail = fauxCenter;
         Base::Vector3d  a1Dir = -dirDim;
         Base::Vector3d  a2Dir = dirDim;
+        if (strcmp(dimType, "DistanceY") == 0 ) {
+            a1Dir = Base::Vector3d(0,1,0);
+            a2Dir = Base::Vector3d(0,-1,0);
+        }
 
         double dimSpan    = (extEndEnd - extStartEnd).Length();     //distance between extension lines
         double fauxToDim1 = (fauxCenter - dim1Tip).Length();        //label to arrow #1
@@ -657,21 +669,33 @@ void QGIViewDimension::draw()
         double lblWidth = datumLabel->boundingRect().width();
         if ((DrawUtil::isBetween(fauxCenter, dim1Tip, dim2Tip)) &&
             (lblWidth > dimSpan) ) {
-            dim1Tail = dim1Tip - tailLength * dirDim;
-            a1Dir = dirDim;
-            a2Dir = -dirDim;
-            dim2Tail = dim2Tip + tailLength * dirDim;
+            if (strcmp(dimType, "DistanceY") == 0 ) {
+                a1Dir = Base::Vector3d(0,-1,0);
+                a2Dir = Base::Vector3d(0,1,0);
+                dim1Tail = dim1Tip;
+                dim2Tail = dim2Tip;
+            } else {
+                dim1Tail = dim1Tip - tailLength * dirDim;
+                dim2Tail = dim2Tip + tailLength * dirDim;
+                a1Dir = dirDim;
+                a2Dir = -dirDim;
+            }
         }
 
         if (!DrawUtil::isBetween(fauxCenter, dim1Tip, dim2Tip)) {
             //case3 - outerPlacement
-            a1Dir = dirDim;
-            a2Dir = -dirDim;
+            if (strcmp(dimType, "DistanceY") == 0 ) {
+                a1Dir = Base::Vector3d(0,-1,0);
+                a2Dir = Base::Vector3d(0,1,0);
+            } else {
+                a1Dir = dirDim;
+                a2Dir = -dirDim;
+            }
             if (fauxToDim1 < fauxToDim2)  {
                 dim1Tail = fauxCenter;
-                dim2Tail = dim2Tip + tailLength * dirDim;
+                dim2Tail = dim2Tip;
             } else {
-                dim1Tail = dim1Tip - tailLength * dirDim;
+                dim1Tail = dim1Tip;
                 dim2Tail = fauxCenter;
             }
         }
@@ -702,11 +726,14 @@ void QGIViewDimension::draw()
         datumLabel->setTransformOriginPoint(bbX / 2, bbY /2);
         double angleOption = 0.0;                                      //put lblText angle adjustments here
         datumLabel->setRotation((angle * 180 / M_PI) + angleOption);
+        if (strcmp(dimType, "DistanceY") == 0 ) {
+            datumLabel->setRotation(-90.0 + angleOption);
+        }
+
 
         aHead1->setDirMode(true);
         aHead2->setDirMode(true);
-        
-        
+    
         if (vp->FlipArrowheads.getValue()) {
             aHead1->setDirection(a1Dir * -1.0);
             aHead2->setDirection(a2Dir * -1.0);
@@ -1166,7 +1193,6 @@ void QGIViewDimension::draw()
 //        }
     } else if( (strcmp(dimType, "Angle") == 0) ||
                (strcmp(dimType, "Angel3Pt")) ) {
-        // Only use two straight line edeges for angle
         anglePoints pts = dim->getAnglePoints();
         Base::Vector3d X(1.0,0.0,0.0);
         Base::Vector3d vertex = Rez::guiX(pts.vertex);
@@ -1205,11 +1231,6 @@ void QGIViewDimension::draw()
         double offsetFudge = 2.0;
         double textOffset = textHeight/2.0 + offsetFudge;
         double radius = labelVec.Length() - textOffset;
-
-        double labelangle = atan2(-labelVec.y, labelVec.x);    //angle with +X axis on [-PI,+PI] (iso)
-        if (labelangle < 0) {                                  //map to [0,2PI)                  (asme angle = 0.0)
-            labelangle += 2.0 * M_PI;
-        }
 
         QRectF arcRect(vertex.x - radius, vertex.y - radius, 2. * radius, 2. * radius);
         Base::Vector3d ar0Pos = vertex + d0 * radius;
@@ -1264,15 +1285,15 @@ void QGIViewDimension::draw()
 
         path.arcMoveTo(arcRect, startangle * 180 / M_PI);
         double actualSweep = 0.0;
+        m_obtuse = false;
         if(isOutside) {
-            updateDim(true);
+            m_obtuse = true;
             if (ccwInner) {              //inner is ccw so outer is cw and sweep is -ve
                 actualSweep = -outsideAngle;
             } else {                     //inner is cw so outer is ccw and sweep is +ve
                 actualSweep = outsideAngle;
             }
         } else {
-            updateDim(false);
             if (ccwInner) {           //inner is ccw and sweep is +ve
                 actualSweep = insideAngle;
             } else {             //inner is cw and sweep is -ve
