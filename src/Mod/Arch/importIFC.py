@@ -44,43 +44,45 @@ if open.__module__ in ['__builtin__','io']:
     pyopen = open # because we'll redefine open below
 
 # which IFC type must create which FreeCAD type
-typesmap = { "Site":         ["IfcSite"],
-             "Building":     ["IfcBuilding"],
-             "Floor":        ["IfcBuildingStorey"],
-             "Structure":    ["IfcBeam", "IfcBeamStandardCase", "IfcColumn", "IfcColumnStandardCase", "IfcSlab", "IfcFooting", "IfcPile", "IfcTendon"],
-             "Wall":         ["IfcWall", "IfcWallStandardCase", "IfcCurtainWall"],
-             "Window":       ["IfcWindow", "IfcWindowStandardCase", "IfcDoor", "IfcDoorStandardCase"],
-             "Roof":         ["IfcRoof"],
-             "Stairs":       ["IfcStair", "IfcStairFlight", "IfcRamp", "IfcRampFlight"],
-             "Space":        ["IfcSpace"],
-             "Rebar":        ["IfcReinforcingBar"],
-             "Panel":        ["IfcPlate"],
-             "Equipment":    ["IfcFurnishingElement","IfcSanitaryTerminal","IfcFlowTerminal","IfcElectricAppliance"],
-             "Pipe":         ["IfcPipeSegment"],
-             "PipeConnector":["IfcPipeFitting"],
-             "BuildingPart": ["IfcElementAssembly"]
-           }
+typesmap = {
+    "Site":         ["IfcSite"],
+    "Building":     ["IfcBuilding"],
+    "Floor":        ["IfcBuildingStorey"],
+    "Structure":    ["IfcBeam", "IfcBeamStandardCase", "IfcColumn", "IfcColumnStandardCase", "IfcSlab", "IfcFooting", "IfcPile", "IfcTendon"],
+    "Wall":         ["IfcWall", "IfcWallStandardCase", "IfcCurtainWall"],
+    "Window":       ["IfcWindow", "IfcWindowStandardCase", "IfcDoor", "IfcDoorStandardCase"],
+    "Roof":         ["IfcRoof"],
+    "Stairs":       ["IfcStair", "IfcStairFlight", "IfcRamp", "IfcRampFlight"],
+    "Space":        ["IfcSpace"],
+    "Rebar":        ["IfcReinforcingBar"],
+    "Panel":        ["IfcPlate"],
+    "Equipment":    ["IfcFurnishingElement","IfcSanitaryTerminal","IfcFlowTerminal","IfcElectricAppliance"],
+    "Pipe":         ["IfcPipeSegment"],
+    "PipeConnector":["IfcPipeFitting"],
+    "BuildingPart": ["IfcElementAssembly"]
+}
 
 # which IFC entity (product) is a structural object
 structuralifcobjects = (
-                       "IfcStructuralCurveMember", "IfcStructuralSurfaceMember",
-                       "IfcStructuralPointConnection", "IfcStructuralCurveConnection", "IfcStructuralSurfaceConnection",
-                       "IfcStructuralAction", "IfcStructuralPointAction",
-                       "IfcStructuralLinearAction", "IfcStructuralLinearActionVarying", "IfcStructuralPlanarAction"
-                       )
+    "IfcStructuralCurveMember", "IfcStructuralSurfaceMember",
+    "IfcStructuralPointConnection", "IfcStructuralCurveConnection", "IfcStructuralSurfaceConnection",
+    "IfcStructuralAction", "IfcStructuralPointAction",
+    "IfcStructuralLinearAction", "IfcStructuralLinearActionVarying", "IfcStructuralPlanarAction"
+)
 
 # specific FreeCAD <-> IFC slang translations
-translationtable = { "Foundation":"Footing",
-                     "Floor":"BuildingStorey",
-                     "Rebar":"ReinforcingBar",
-                     "HydroEquipment":"SanitaryTerminal",
-                     "ElectricEquipment":"ElectricAppliance",
-                     "Furniture":"FurnishingElement",
-                     "Stair Flight":"StairFlight",
-                     "Curtain Wall":"CurtainWall",
-                     "Pipe Segment":"PipeSegment",
-                     "Pipe Fitting":"PipeFitting"
-                   }
+translationtable = {
+    "Foundation":"Footing",
+    "Floor":"BuildingStorey",
+    "Rebar":"ReinforcingBar",
+    "HydroEquipment":"SanitaryTerminal",
+    "ElectricEquipment":"ElectricAppliance",
+    "Furniture":"FurnishingElement",
+    "Stair Flight":"StairFlight",
+    "Curtain Wall":"CurtainWall",
+    "Pipe Segment":"PipeSegment",
+    "Pipe Fitting":"PipeFitting"
+}
 
 # the base IFC template for export
 ifctemplate = """ISO-10303-21;
@@ -152,6 +154,7 @@ def dd2dms(dd):
     if dd < 0:
         degrees = -degrees
     return (int(degrees),int(minutes),int(seconds))
+
 
 def dms2dd(degrees, minutes, seconds, milliseconds=0):
 
@@ -955,7 +958,7 @@ def insert(filename,docname,skip=[],only=[],root=None):
                                     if e.NominalValue.Unit:
                                         pvalue += e.NominalValue.Unit
                                 d[pname] = psetname+";;"+ptype+";;"+pvalue
-                                #print ("adding property: ",pname,ptype,pvalue," pset ",psetname)
+                                #print("adding property: ",pname,ptype,pvalue," pset ",psetname)
                     obj.IfcProperties = d
 
                 elif hasattr(obj,"IfcAttributes"):
@@ -1155,7 +1158,7 @@ def insert(filename,docname,skip=[],only=[],root=None):
                 cobs = []
                 for child in children:
                     if child in objects.keys():
-                        if not child in swallowed: # don't add objects already in groups
+                        if child not in swallowed: # don't add objects already in groups
                             cobs.append(objects[child])
                 if cobs:
                     if DEBUG and first:
@@ -1190,7 +1193,7 @@ def insert(filename,docname,skip=[],only=[],root=None):
     count = 0
 
     scaling = getScaling(ifcfile)
-    #print "scaling factor =",scaling
+    #print("scaling factor =",scaling)
     for annotation in annotations:
 
         anno = None
@@ -1280,8 +1283,8 @@ def insert(filename,docname,skip=[],only=[],root=None):
     # Materials
 
     if DEBUG and materials: print("Creating materials...",end="")
-    #print "mattable:",mattable
-    #print "materials:",materials
+    #print("mattable:",mattable)
+    #print("materials:",materials)
     fcmats = {}
     for material in materials:
         name = "Material"
@@ -1325,7 +1328,6 @@ def insert(filename,docname,skip=[],only=[],root=None):
         FreeCADGui.SendMsgToActiveView("ViewFit")
     print("Finished importing.")
     return doc
-
 
 
 class recycler:
@@ -1482,7 +1484,6 @@ class recycler:
 
 
 def export(exportList,filename):
-
 
     "exports FreeCAD contents to an IFC file"
 
@@ -1779,7 +1780,6 @@ def export(exportList,filename):
                 subproducts[o.Name] = prod2
                 ifcfile.createIfcRelAggregates(ifcopenshell.guid.compress(uuid.uuid1().hex),history,'Addition','',product,[prod2])
 
-
         # subtractions
 
         guests = []
@@ -1787,7 +1787,7 @@ def export(exportList,filename):
             if hasattr(o,"Hosts"):
                 for co in o.Hosts:
                     if co == obj:
-                        if not o in guests:
+                        if o not in guests:
                             guests.append(o)
         if hasattr(obj,"Subtractions") and (shapetype in ["extrusion","no shape"]):
             for o in obj.Subtractions + guests:
@@ -2063,7 +2063,7 @@ def export(exportList,filename):
     # buildingParts can be exported as any "normal" IFC type. In that case, gather their elements first
 
     for bp in Draft.getObjectsOfType(objectslist,"BuildingPart"):
-        if not bp.IfcRole in ["Site","Building","Building Storey","Space","Undefined"]:
+        if bp.IfcRole not in ["Site","Building","Building Storey","Space","Undefined"]:
             if bp.Name in products:
                 subs = []
                 for c in bp.Group:
@@ -2290,7 +2290,7 @@ def export(exportList,filename):
         for g in sortedgroups:
             if g[0] in groups.keys():
                 del groups[g[0]]
-    #print "sorted groups:",sortedgroups
+    #print("sorted groups:",sortedgroups)
     containers = {}
     for g in sortedgroups:
         if g[1]:
@@ -2325,16 +2325,12 @@ def export(exportList,filename):
     # add remaining 2D objects to default host
 
     if annos:
-        remaining = [anno for anno in annos.values() if not anno in swallowed]
+        remaining = [anno for anno in annos.values() if anno not in swallowed]
         if remaining:
             if not defaulthost:
                 defaulthost = ifcfile.createIfcBuildingStorey(ifcopenshell.guid.compress(uuid.uuid1().hex),history,"Default Storey",'',None,None,None,None,"ELEMENT",None)
                 ifcfile.createIfcRelAggregates(ifcopenshell.guid.compress(uuid.uuid1().hex),history,'DefaultStoreyLink','',buildings[0],[defaulthost])
             ifcfile.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.compress(uuid.uuid1().hex),history,'AnnotationsLink','',remaining,defaulthost)
-
-
-
-
 
     if DEBUG: print("writing ",filename,"...")
 
@@ -2358,7 +2354,6 @@ def export(exportList,filename):
 
 def buildAddress(obj,ifcfile):
 
-
     a = obj.Address or None
     p = obj.PostalCode or None
     t = obj.City or None
@@ -2380,6 +2375,7 @@ def buildAddress(obj,ifcfile):
     else:
         addr = None
     return addr
+
 
 def createFromProperties(propsets,ifcfile):
 
@@ -2468,7 +2464,7 @@ def createCurve(ifcfile,wire):
     pol = None
     last = None
     if wire.ShapeType == "edge":
-        edges = [edge]
+        edges = [wire]
     else:
         edges = Part.__sortEdges__(wire.Edges)
     for e in edges:
@@ -2514,6 +2510,7 @@ def createCurve(ifcfile,wire):
         pol = ifcfile.createIfcCompositeCurve(segments,False)
     return pol
 
+
 def getEdgesAngle(edge1, edge2):
     """ getEdgesAngle(edge1, edge2): returns a angle between two edges."""
     vec1 = vec(edge1)
@@ -2521,6 +2518,7 @@ def getEdgesAngle(edge1, edge2):
     angle = vec1.getAngle(vec2)
     angle = math.degrees(angle)
     return angle
+
 
 def checkRectangle(edges):
     """ checkRectangle(edges=[]): This function checks whether the given form is a rectangle
@@ -2535,6 +2533,7 @@ def checkRectangle(edges):
     if angles.count(90) == 2 and (angles.count(180) == 1 or angles.count(0) == 1):
         return True
     return False
+
 
 def getProfile(ifcfile,p):
 
@@ -2677,7 +2676,7 @@ def getRepresentation(ifcfile,context,obj,forcebrep=False,subtraction=False,tess
                                 profiledefs[pstr] = profile
                         if profile and not(DraftVecUtils.isNull(evi)):
                             #ev = pl.Rotation.inverted().multVec(evi)
-                            #print "evi:",evi
+                            #print("evi:",evi)
                             if not tostore:
                                 # add the object placement to the profile placement. Otherwise it'll be done later at map insert
                                 pl2 = FreeCAD.Placement(obj.Placement)
@@ -2775,7 +2774,7 @@ def getRepresentation(ifcfile,context,obj,forcebrep=False,subtraction=False,tess
                             dataset = fcshape.Solids
                         else:
                             dataset = fcshape.Shells
-                            #if DEBUG: print "Warning! object contains no solids"
+                            #if DEBUG: print("Warning! object contains no solids")
 
                         # if this is a clone, place back the shapes in null position
                         if tostore:
@@ -2853,7 +2852,7 @@ def getRepresentation(ifcfile,context,obj,forcebrep=False,subtraction=False,tess
                                             bound = ifcfile.createIfcFaceBound(loop,True)
                                             loops.append(bound)
                                         else:
-                                            print ("Warning: wire with one/no vertex in ",obj.Label)
+                                            print("Warning: wire with one/no vertex in ", obj.Label)
                                 face =  ifcfile.createIfcFace(loops)
                                 faces.append(face)
 
