@@ -253,7 +253,7 @@ def fill_femresult_mechanical(results, result_set, span):
 
         if 'stress' in result_set:
             stress = result_set['stress']
-            nsr=len(stress)
+            nsr = len(stress)
             print("nsr: {}".format(nsr))
 
             if nsr > 0:
@@ -265,17 +265,18 @@ def fill_femresult_mechanical(results, result_set, span):
                 ps1v = []
                 ps2v = []
                 ps3v = []
-                ic=np.zeros(nsr)
-#
-#               HarryvL: addtional arrays to hold reinforcement ratios and mohr coulomb stress          
-#                
+                ic = np.zeros(nsr)
+                #
+                # HarryvL: addtional arrays to hold reinforcement ratios
+                # and mohr coulomb stress
+                #
                 rhx = []
                 rhy = []
                 rhz = []
                 moc = []
-#
-#               HarryvL: determine concrete / non-concrete nodes
-#                
+                #
+                # HarryvL: determine concrete / non-concrete nodes
+                #
                 result_mesh = FreeCAD.ActiveDocument.Result_mesh.FemMesh
                 for obj in FreeCAD.ActiveDocument.Objects:
                     if obj.isDerivedFrom('App::MaterialObjectPython'):
@@ -289,7 +290,7 @@ def fill_femresult_mechanical(results, result_set, span):
                                 for ref in obj.References:
                                     concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
                                     for cn in concrete_nodes:
-                                        ic [cn-1] = 1
+                                        ic[cn-1] = 1
                         else:
                             print("NOT CONCRETE")
                             if obj.References == []:
@@ -298,31 +299,34 @@ def fill_femresult_mechanical(results, result_set, span):
                                         ic[iic] = 2
                             else:
                                 for ref in obj.References:
-                                    non_concrete_nodes = femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
+                                    non_concrete_nodes =femmesh.meshtools.get_femnodes_by_refshape(result_mesh, ref)
                                     for ncn in non_concrete_nodes:
-                                        ic [ncn-1] = 2
+                                        ic[ncn-1] = 2
 
                 for isv in range(nsr):
 
-                    i=list(stress.values())[isv]
+                    i = list(stress.values())[isv]
 
-                    rhox=0.
-                    rhoy=0.
-                    rhoz=0.
-                    mc=0.
-                    scxx=i[0]
-                    scyy=i[1]
-                    sczz=i[2]
+                    rhox = 0.
+                    rhoy = 0.
+                    rhoz = 0.
+                    mc = 0.
+                    scxx = i[0]
+                    scyy = i[1]
+                    sczz = i[2]
 
                     mstress.append(calculate_von_mises(i))
                     
-                    if ic[isv]==1:
-#
-#                       HarryvL: for concrete scxx etc. are affected by reinforcement (see calculate_rho(i)). for all other materials scxx etc. are the original stresses
-#
+                    if ic[isv] == 1:
+                        #
+                        # HarryvL: for concrete scxx etc. are affected by
+                        # reinforcement (see calculate_rho(i)). for all other
+                        # materials scxx etc. are the original stresses
+                        #
                         rhox, rhoy, rhoz, scxx, scyy, sczz = calculate_rho(i)
 
-                    prin1, prin2, prin3, shear, psv = calculate_principal_stress(i,scxx,scyy,sczz)
+                    prin1, prin2, prin3, shear, psv =\
+                        calculate_principal_stress(i, scxx, scyy, sczz)
 
                     prinstress1.append(prin1)
                     prinstress2.append(prin2)
@@ -332,28 +336,38 @@ def fill_femresult_mechanical(results, result_set, span):
                     ps2v.append(psv[1])
                     ps3v.append(psv[2])
 
-#
-#                   reinforcement ratios and mohr coulomb criterion
-#
+                    #
+                    # reinforcement ratios and mohr coulomb criterion
+                    #
                     rhx.append(rhox)
                     rhy.append(rhoy)
                     rhz.append(rhoz)
-                    if ic[isv]==1:
-                        mc=calculate_mohr_coulomb(prin1,prin2,prin3)
+                    if ic[isv] == 1:
+                        mc = calculate_mohr_coulomb(prin1, prin3)
                     moc.append(mc)
 
                 if eigenmode_number > 0:
-                    results.StressValues = list(map((lambda x: x * scale), mstress))
-                    results.PrincipalMax = list(map((lambda x: x * scale), prinstress1))
-                    results.PrincipalMed = list(map((lambda x: x * scale), prinstress2))
-                    results.PrincipalMin = list(map((lambda x: x * scale), prinstress3))
-                    results.MaxShear = list(map((lambda x: x * scale), shearstress))
-#
-#                   HarryvL: addtional concrete and principal stress plot results for use in _ViewProviderFemResultMechanical          
-#                                    
-                    results.ReinforcementRatio_x = list(map((lambda x: x * scale), rhx))
-                    results.ReinforcementRatio_y = list(map((lambda x: x * scale), rhy))
-                    results.ReinforcementRatio_z = list(map((lambda x: x * scale), rhz))
+                    results.StressValues = list(map((lambda x: x * scale),
+                                                    mstress))
+                    results.PrincipalMax = list(map((lambda x: x * scale),
+                                                    prinstress1))
+                    results.PrincipalMed = list(map((lambda x: x * scale),
+                                                    prinstress2))
+                    results.PrincipalMin = list(map((lambda x: x * scale),
+                                                    prinstress3))
+                    results.MaxShear = list(map((lambda x: x * scale),
+                                                shearstress))
+
+                    #
+                    # HarryvL: addtional concrete and principal stress
+                    # results for use in _ViewProviderFemResultMechanical          
+                    #                                    
+                    results.ReinforcementRatio_x = list(map((lambda x:
+                                                             x * scale), rhx))
+                    results.ReinforcementRatio_y = list(map((lambda x:
+                                                             x * scale), rhy))
+                    results.ReinforcementRatio_z = list(map((lambda x:
+                                                             x * scale), rhz))
                     results.MohrCoulomb = list(map((lambda x: x * scale), moc))
                     
                     results.PS1Vector = list(map((lambda x: x * scale), ps1v))
@@ -367,12 +381,13 @@ def fill_femresult_mechanical(results, result_set, span):
                     results.PrincipalMed = prinstress2
                     results.PrincipalMin = prinstress3
                     results.MaxShear = shearstress
-#
-#                   HarryvL: addtional concrete and principal stress plot results for use in _ViewProviderFemResultMechanical          
-#                                    
-                    results.ReinforcementRatio_x  = rhx
-                    results.ReinforcementRatio_y  = rhy                    
-                    results.ReinforcementRatio_z  = rhz
+                    #
+                    # HarryvL: addtional concrete and principal stress plot
+                    # results for use in _ViewProviderFemResultMechanical
+                    #
+                    results.ReinforcementRatio_x = rhx
+                    results.ReinforcementRatio_y = rhy
+                    results.ReinforcementRatio_z = rhz
                     results.MohrCoulomb = moc
                  
                     results.PS1Vector = ps1v
@@ -488,7 +503,8 @@ def fill_femresult_stats(results):
         temp_avg = sum(results.Temperature) / no_of_values
         temp_max = max(results.Temperature)
     if results.MassFlowRate:
-        no_of_values = len(results.MassFlowRate)  # DisplacementVectors is empty, no_of_values needs to be set
+        # DisplacementVectors is empty, no_of_values needs to be set
+        no_of_values = len(results.MassFlowRate)
         mflow_min = min(results.MassFlowRate)
         mflow_avg = sum(results.MassFlowRate) / no_of_values
         mflow_max = max(results.MassFlowRate)
@@ -510,16 +526,19 @@ def fill_femresult_stats(results):
                      temp_min, temp_avg, temp_max,
                      mflow_min, mflow_avg, mflow_max,
                      npress_min, npress_avg, npress_max]
-    # stat_types = ["U1", "U2", "U3", "Uabs", "Sabs", "MaxPrin", "MidPrin", "MinPrin", "MaxShear", "Peeq", "Temp", "MFlow", "NPress"]
+    # stat_types = ["U1", "U2", "U3", "Uabs", "Sabs", "MaxPrin", "MidPrin",
+    # "MinPrin", "MaxShear", "Peeq", "Temp", "MFlow", "NPress"]
     # len(stat_types) == 13*3 == 39
     # do not forget to adapt initialization of all Stats items in modules:
     # - module femobjects/_FemResultMechanical.py
     # do not forget to adapt the def get_stats in:
     # - module femresult/resulttools.py
     # - module femtest/testccxtools.py
-    # TODO: all stats stuff should be reimplemented, ma be a dictionary would be far more robust than a list
+    # TODO: all stats stuff should be reimplemented, ma be a dictionary would
+    # be far more robust than a list
 
-    FreeCAD.Console.PrintLog('Stats list for result obj: ' + results.Name + ' calculated\n')
+    FreeCAD.Console.PrintLog('Stats list for result obj: ' + results.Name +
+                             ' calculated\n')
     return results
 
 
@@ -540,39 +559,44 @@ def calculate_von_mises(i):
     return vm_stress
 
 
-def calculate_principal_stress(i,scxx,scyy,sczz):
-#
-#   HarryvL - calculate principal stress vectors and values
-#           - for concrete stresses use scxx, scyy, sczz on the diagonal of the stress tensor
-#           - for total stresses use i[1], i[2], i[3] on the diagonal of the stress tensor
-#           - TODO: option to use concrete or total stresses by user 
-#
-#
+def calculate_principal_stress(i, scxx, scyy, sczz):
+    #
+    #   HarryvL - calculate principal stress vectors and values
+    #           - for concrete stresses use scxx, scyy, sczz on the diagonal
+    #             of the stress tensor
+    #           - for total stresses use i[0], i[1], i[2] on the diagonal of
+    #             the stress tensor
+    #           - TODO: option to use concrete or total stresses by user
+    #
+    #
 
-    sigma = np.array([[scxx, i[3], i[5]],
-                      [i[3], scyy, i[4]],
-                      [i[5], i[4], sczz]])
+    sigma = np.array([[i[0], i[3], i[5]],
+                      [i[3], i[1], i[4]],
+                      [i[5], i[4], i[3]]])
     
-    eigenValues, eigenVectors = np.linalg.eig(sigma)
+    eigenvalues, eigenvectors = np.linalg.eig(sigma)
 
-#    
-#   HarryvL: suppress complex eigenvalue and vectors that may occur for near-zero (numerical noise) stress fields
-#    
+    #
+    #   HarryvL: suppress complex eigenvalue and vectors that may occur for
+    #   near-zero (numerical noise) stress fields
+    #
 
-    eigenValues = eigenValues.real
-    eigenVectors = eigenVectors.real
+    eigenvalues = eigenvalues.real
+    eigenvectors = eigenvectors.real
 
-    eigenVectors[:,0]=eigenValues[0]*eigenVectors[:,0]
-    eigenVectors[:,1]=eigenValues[1]*eigenVectors[:,1]
-    eigenVectors[:,2]=eigenValues[2]*eigenVectors[:,2]
+    eigenvectors[:, 0] = eigenvalues[0] * eigenvectors[:, 0]
+    eigenvectors[:, 1] = eigenvalues[1] * eigenvectors[:, 1]
+    eigenvectors[:, 2] = eigenvalues[2] * eigenvectors[:, 2]
 
-    idx = eigenValues.argsort()[::-1]   
-    eigenValues = eigenValues[idx]
-    eigenVectors = eigenVectors[:,idx]
+    idx = eigenvalues.argsort()[::-1]   
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
 
-    maxshear = (eigenValues[0] - eigenValues[2]) / 2.0
+    maxshear = (eigenvalues[0] - eigenvalues[2]) / 2.0
     
-    return (eigenValues[0], eigenValues[1], eigenValues[2], maxshear, tuple([tuple(row) for row in eigenVectors.T]))
+    return (eigenvalues[0], eigenvalues[1], eigenvalues[2], maxshear,
+            tuple([tuple(row) for row in eigenvectors.T]))
+
 
 def calculate_disp_abs(displacements):
     disp_abs = []
@@ -583,19 +607,22 @@ def calculate_disp_abs(displacements):
 
 def calculate_rho(i):
 
-#
-#   HarryvL - Calculation of Reinforcement Ratios and Concrete Stresses according to http://heronjournal.nl/53-4/3.pdf
-#           - See post https://forum.freecadweb.org/viewtopic.php?f=18&t=28821
-#           - TODO: the following material parameters are hard-coded and should be entered in material dialog
-#                   fy: factored yield strength of reinforcement bars
-#                   r0: optional value for minimum reinforcement ratio (rx, y, rz are reduced accordingly) - default 0.0
-#
-    fy=315.
-    r0=0.0
+    #
+    #   HarryvL - Calculation of Reinforcement Ratios and
+    #   Concrete Stresses according to http://heronjournal.nl/53-4/3.pdf
+    #           - See post:
+    #             https://forum.freecadweb.org/viewtopic.php?f=18&t=28821
+    #           - TODO: the following material parameters are hard-coded
+    #             and should be entered in material dialog
+    #                   fy: factored yield strength of reinforcement bars
+    #                   r0: optional value for minimum reinforcement ratio
+    #                       (rx, y, rz are reduced accordingly) - default 0.0
+    #
+    fy = 315.
+    r0 = 0.0
 
-
-    Rmin=1.0e9
-    Eqmin=14
+    rmin = 1.0e9
+    eqmin = 14
 
     sxx = i[0]
     syy = i[1]
@@ -603,157 +630,167 @@ def calculate_rho(i):
     sxy = i[3]
     syz = i[4]
     sxz = i[5]
-    
-    Rhox=np.zeros(15)
-    Rhoy=np.zeros(15)
-    Rhoz=np.zeros(15)    
-    
-#    I1=sxx+syy+szz NOT USED
-#    I2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2 NOT USED
-    I3=sxx*syy*szz+2*sxy*sxz*syz-sxx*syz**2-syy*sxz**2-szz*sxy**2
-    
-    #Solution (5)
-    d=(sxx*syy-sxy**2)
-    if d!=0.:
-        Rhoz[0]=I3/d/fy 
-    
-    #Solution (6)
-    d=(sxx*szz-sxz**2)
-    if d!=0.: 
-        Rhoy[1]=I3/d/fy 
-    
-    #Solution (7)
-    d=(syy*szz-syz**2)
-    if d!=0.: 
-        Rhox[2]=I3/d/fy 
-    
-    #Solution (9)
-    if sxx!=0.:
-        fc=sxz*sxy/sxx-syz
-        fxy=sxy**2/sxx
-        fxz=sxz**2/sxx
 
-        #Solution (9+)
-        Rhoy[3]=syy-fxy+fc
-        Rhoy[3]/=fy
-        Rhoz[3]=szz-fxz+fc
-        Rhoz[3]/=fy
+    rhox = np.zeros(15)
+    rhoy = np.zeros(15)
+    rhoz = np.zeros(15)
+    
+    #    i1=sxx+syy+szz NOT USED
+    #    i2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2 NOT USED
+    i3 = (sxx * syy * szz + 2 * sxy * sxz * syz - sxx * syz**2 -
+          syy * sxz**2 - szz * sxy**2)
+    
+    #    Solution (5)
+    d = (sxx * syy - sxy**2)
+    if d != 0.:
+        rhoz[0] = i3 / d / fy
+    
+    #    Solution (6)
+    d = (sxx * szz - sxz**2)
+    if d != 0.:
+        rhoy[1] = i3 / d / fy
+    
+    #    Solution (7)
+    d = (syy * szz - syz**2)
+    if d != 0.:
+        rhox[2] = i3 / d / fy
+    
+    #    Solution (9)
+    if sxx != 0.:
+        fc = sxz * sxy / sxx - syz
+        fxy = sxy**2 / sxx
+        fxz = sxz**2 / sxx
+
+        #    Solution (9+)
+        rhoy[3] = syy - fxy + fc
+        rhoy[3] /= fy
+        rhoz[3] = szz - fxz + fc
+        rhoz[3] /= fy
    
-        #Solution (9-)
-        Rhoy[4]=syy-fxy-fc
-        Rhoy[4]/=fy
-        Rhoz[4]=szz-fxz-fc
-        Rhoz[4]/=fy
+        #    Solution (9-)
+        rhoy[4] = syy - fxy - fc
+        rhoy[4] /= fy
+        rhoz[4] = szz - fxz - fc
+        rhoz[4] /= fy
 
-    #Solution (10)
-    if syy!=0.:
-        fc=syz*sxy/syy-sxz
-        fxy=sxy**2/syy
-        fyz=syz**2/syy
+    #   Solution (10)
+    if syy != 0.:
+        fc = syz * sxy / syy - sxz
+        fxy = sxy**2 / syy
+        fyz = syz**2 / syy
 
-        #Solution (10+)
-        Rhox[5]=sxx-fxy+fc
-        Rhox[5]/=fy
-        Rhoz[5]=szz-fyz+fc
-        Rhoz[5]/=fy
+        # Solution (10+)
+        rhox[5] = sxx - fxy + fc
+        rhox[5] /= fy
+        rhoz[5] = szz - fyz + fc
+        rhoz[5] /= fy
    
-         #Solution (10-)vm
-        Rhox[6]=sxx-fxy-fc
-        Rhox[6]/=fy
-        Rhoz[6]=szz-fyz-fc
-        Rhoz[6]/=fy
+        # Solution (10-)vm
+        rhox[6] = sxx - fxy - fc
 
-    #Solution (11)
-    if szz!=0.:
-        fc=sxz*syz/szz-sxy
-        fxz=sxz**2/szz
-        fyz=syz**2/szz
+        rhox[6] /= fy
+        rhoz[6] = szz - fyz - fc
+        rhoz[6] /= fy
 
-        #Solution (11+)
-        Rhox[7]=sxx-fxz+fc
-        Rhox[7]/=fy
-        Rhoy[7]=syy-fyz+fc
-        Rhoy[7]/=fy
+    # Solution (11)
+    if szz != 0.:
+        fc = sxz * syz / szz - sxy
+        fxz = sxz**2 / szz
+        fyz = syz**2 / szz
+
+        # Solution (11+)
+        rhox[7] = sxx - fxz + fc
+        rhox[7] /= fy
+        rhoy[7] = syy - fyz + fc
+        rhoy[7] /= fy
    
-        #Solution (11-)
-        Rhox[8]=sxx-fxz-fc
-        Rhox[8]/=fy
-        Rhoy[8]=syy-fyz-fc
-        Rhoy[8]/=fy
+        # Solution (11-)
+        rhox[8] = sxx - fxz - fc
+        rhox[8] /= fy
+        rhoy[8] = syy - fyz - fc
+        rhoy[8] /= fy
 
-    #Solution (13)
-    Rhox[9]=(sxx+sxy+sxz)/fy
-    Rhoy[9]=(syy+sxy+syz)/fy
-    Rhoz[9]=(szz+sxz+syz)/fy
+    # Solution (13)
+    rhox[9] = (sxx + sxy + sxz) / fy
+    rhoy[9] = (syy + sxy + syz) / fy
+    rhoz[9] = (szz + sxz + syz) / fy
     
-    #Solution (14)
-    Rhox[10]=(sxx+sxy-sxz)/fy
-    Rhoy[10]=(syy+sxy-syz)/fy
-    Rhoz[10]=(szz-sxz-syz)/fy
+    # Solution (14)
+    rhox[10] = (sxx + sxy - sxz) / fy
+    rhoy[10] = (syy + sxy - syz) / fy
+    rhoz[10] = (szz - sxz - syz) / fy
 
-    #Solution (15)
-    Rhox[11]=(sxx-sxy-sxz)/fy
-    Rhoy[11]=(syy-sxy+syz)/fy
-    Rhoz[11]=(szz-sxz+syz)/fy
+    # Solution (15)
+    rhox[11] = (sxx - sxy - sxz) / fy
+    rhoy[11] = (syy - sxy + syz) / fy
+    rhoz[11] = (szz - sxz + syz) / fy
                         
-    #Solution (16)
-    Rhox[12]=(sxx-sxy+sxz)/fy
-    Rhoy[12]=(syy-sxy-syz)/fy
-    Rhoz[12]=(szz+sxz-syz)/fy
+    # Solution (16)
+    rhox[12] = (sxx - sxy + sxz) / fy
+    rhoy[12] = (syy - sxy - syz) / fy
+    rhoz[12] = (szz + sxz - syz) / fy
 
-    #Solution (17)
-    if syz!=0.:
-        Rhox[13]=(sxx-sxy*sxz/syz)/fy
-    if sxz!=0.:
-        Rhoy[13]=(syy-sxy*syz/sxz)/fy
-    if sxy!=0.:
-        Rhoz[13]=(szz-sxz*syz/sxy)/fy
+    # Solution (17)
+    if syz != 0.:
+        rhox[13] = (sxx - sxy * sxz / syz) / fy
+    if sxz != 0.:
+        rhoy[13] = (syy - sxy * syz / sxz) / fy
+    if sxy != 0.:
+        rhoz[13] = (szz - sxz * syz / sxy) / fy
     
-    for ir in range (0,Rhox.size):
+    for ir in range(0, rhox.size):
 
-        if Rhox[ir]>=-1.e-10 and Rhoy[ir]>=-1.e-10 and Rhoz[ir]>-1.e-10:
+        if rhox[ir] >= -1.e-10 and rhoy[ir] >= -1.e-10 and rhoz[ir] > -1.e-10:
 
-            #Concrete Stresses
-            scxx=sxx-Rhox[ir]*fy
-            scyy=syy-Rhoy[ir]*fy
-            sczz=szz-Rhoz[ir]*fy
-            Ic1=scxx+scyy+sczz
-            Ic2=scxx*scyy+scyy*sczz+sczz*scxx-sxy**2-sxz**2-syz**2
-            Ic3=scxx*scyy*sczz+2*sxy*sxz*syz-scxx*syz**2-scyy*sxz**2-sczz*sxy**2
+            # Concrete Stresses
+            scxx = sxx - rhox[ir] * fy
+            scyy = syy - rhoy[ir] * fy
+            sczz = szz - rhoz[ir] * fy
+            ic1 = (scxx + scyy + sczz)
+            ic2 = (scxx * scyy + scyy * sczz + sczz * scxx - sxy**2 -
+                   sxz**2 - syz**2)
+            ic3 = (scxx * scyy * sczz + 2 * sxy * sxz * syz - scxx * syz**2 -
+                   scyy * sxz**2 - sczz * sxy**2)
             
-            if(Ic1<=1.e-6 and Ic2>=-1.e-6 and Ic3<=1.0e-6):
+            if ic1 <= 1.e-6 and ic2 >= -1.e-6 and ic3 <= 1.0e-6:
 
-                Rsum=Rhox[ir]+Rhoy[ir]+Rhoz[ir]
+                rsum = rhox[ir] + rhoy[ir] + rhoz[ir]
 
-                if Rsum<Rmin and Rsum>0.:
-                    Rmin=Rsum
-                    Eqmin=ir
+                if rsum < rmin and rsum > 0.:
+                    rmin = rsum
+                    eqmin = ir
 
-    rx=max(Rhox[Eqmin]-r0,0.0)
-    ry=max(Rhoy[Eqmin]-r0,0.0)
-    rz=max(Rhoz[Eqmin]-r0,0.0)
+    rx = max(rhox[eqmin]-r0, 0.0)
+    ry = max(rhoy[eqmin]-r0, 0.0)
+    rz = max(rhoz[eqmin]-r0, 0.0)
 
-    scxx=sxx-Rhox[Eqmin]*fy
-    scyy=syy-Rhoy[Eqmin]*fy
-    sczz=szz-Rhoz[Eqmin]*fy
+    scxx = sxx - rx * fy
+    scyy = syy - ry * fy
+    sczz = szz - rz * fy
     
-    return (Rhox[Eqmin],Rhoy[Eqmin],Rhoz[Eqmin],scxx,scyy,sczz)
+    return rhox[eqmin], rhoy[eqmin], rhoz[eqmin], scxx, scyy, sczz
 
 
-def calculate_mohr_coulomb(prin1,prin2,prin3):
-#
-#   HarryvL - Calculation of Mohr Coulomb yield criterion to judge concrete curshing and shear failure
-#           - TODO: the following material parameters are hard-coded and should be entered in material dialog
-#                   phi: angle of internal friction for concrete - default 30 degrees
-#                   fck: factored concrete cube compressive stength - default 0.75*0.6*35.0 = 15.75 MPa 
-#
+def calculate_mohr_coulomb(prin1, prin3):
+    #
+    #   HarryvL - Calculation of Mohr Coulomb yield criterion to judge
+    #             concrete curshing and shear failure
+    #           - TODO: the following material parameters are hard-coded
+    #             and should be entered in material dialog
+    #                   phi: angle of internal friction for
+    #                        concrete - default 30 degrees
+    #                   fck: factored concrete cube compressive
+    #                        stength - default 0.75*0.6*35.0 = 15.75 MPa
+    #
     
-    phi=np.pi/6.
-    fck=15.75
-    coh=fck*(1-np.sin(phi))/2/np.cos(phi)
+    phi = np.pi/6.
+    fck = 15.75
+    coh = fck * (1 - np.sin(phi)) / 2 / np.cos(phi)
     
-    mc_stress=(prin1-prin3)+(prin1+prin3)*np.sin(phi)-2.*coh*np.cos(phi)
+    mc_stress = ((prin1 - prin3) + (prin1 + prin3) * np.sin(phi) -
+                 2. * coh * np.cos(phi))
     
-    if mc_stress<0.: mc_stress=0.
+    if mc_stress < 0.:
+        mc_stress = 0.
             
     return mc_stress
